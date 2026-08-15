@@ -4,14 +4,14 @@ import { v4 as uuid } from 'uuid';
 
 export class Governance {
   private hedera: HederaClient;
-  private tokenId: string;
   private proposalTopicId: string;
   private proposals = new Map<string, GovernanceProposal>();
 
   constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string) {
     this.hedera = hedera;
-    this.tokenId = _tokenId;
     this.proposalTopicId = proposalTopicId;
+    // _tokenId reserved for future HTS governance-token integration (votes-weighted-by-HTS-balance)
+    void _tokenId;
   }
 
   async createProposal(title: string, description: string, durationDays = 7): Promise<string> {

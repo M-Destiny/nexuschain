@@ -60,7 +60,7 @@ export class Marketplace {
     }));
   }
 
-  async getRevenue(agentId: string): Promise<string> {
+  async getRevenue(_agentId: string): Promise<string> {
     // In production: query contract state for agent's accumulated HBAR
     return '0';
   }
