@@ -71,6 +71,19 @@ contract NexusChainMarketplace {
         _;
     }
 
+    /**
+     * @dev Reentrancy guard using a function-scoped lock (Checks-Effects-Interactions).
+     * Applied to any function that performs an external call BEFORE updating state.
+     * OpenZeppelin-style: minimal gas footprint, single uint storage slot.
+     */
+    uint256 private _locked = 1;
+    modifier nonReentrant() {
+        require(_locked == 1, "Reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
+
     // --- Agent Registry ---
     function registerAgent(
         string memory id,
@@ -130,23 +143,30 @@ contract NexusChainMarketplace {
         emit AgentListed(agentId, price);
     }
 
-    function purchaseAgent(string memory agentId) external payable onlyActive(agentId) {
+    function purchaseAgent(string memory agentId) external payable onlyActive(agentId) nonReentrant {
         require(listings[agentId].exists, "Agent not listed");
         uint256 price = listings[agentId].price;
         require(msg.value >= price, "Insufficient payment");
 
+        // --- Checks (above) + Effects (below) happen BEFORE any external call.
+        // CEI ordering + the nonReentrant guard eliminates the classic
+        // reentrancy window where a malicious seller fallback could re-enter
+        // purchaseAgent and drain msg.sender multiple times.
         address payable seller = agents[agentId].owner;
-        uint256 revenue = price * 95 / 100; // 5% platform fee
+        uint256 revenue = price * 95 / 100; // 5% platform fee retained in treasury
+        uint256 refund = msg.value - price;
+
+        // Effects: bump view counter and accrue agent revenue SYNCHRONOUSLY.
+        listings[agentId].views++;
         agentRevenue[agentId] += revenue;
 
-        // Transfer HBAR (in production: use HTS transfer)
-        seller.transfer(revenue);
-        if (msg.value > price) {
-            payable(msg.sender).transfer(msg.value - price);
+        // Interactions: external transfers happen LAST, with no further state writes.
+        (bool sellerOk, ) = seller.call{value: revenue}("");
+        require(sellerOk, "Seller transfer failed");
+        if (refund > 0) {
+            (bool refundOk, ) = msg.sender.call{value: refund}("");
+            require(refundOk, "Refund failed");
         }
-
-        // Increment view count
-        listings[agentId].views++;
 
         emit AgentPurchased(agentId, msg.sender, price, seller);
     }
