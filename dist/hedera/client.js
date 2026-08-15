@@ -145,23 +145,8 @@ export class HederaClient {
     isTransient(err) {
         if (!(err instanceof Error))
             return false;
-        const msg = err.message || '';
-        if (TRANSIENT_PATTERNS.some((p) => msg.includes(p)))
-            return true;
-        // Hedera SDK exposes typed status codes via .status on some error classes;
-        // cover the common BUSY-style statuses.
-        if (err.status) {
-            const code = err.status;
-            const transientStatuses = [
-                Status.Busy,
-                Status.Timeout,
-                Status.PlatformTransactionNotCreated,
-                Status.Unavailable,
-                Status.ResourceExhausted,
-            ];
-            return transientStatuses.includes(code);
-        }
-        return false;
+        const msg = (err.message || '') + ' ' + (err.name || '');
+        return TRANSIENT_PATTERNS.some((p) => msg.includes(p));
     }
     sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
