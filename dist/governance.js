@@ -6,7 +6,7 @@ export class Governance {
     proposals = new Map();
     constructor(hedera, _tokenId, proposalTopicId) {
         this.hedera = hedera;
-        this.tokenId = tokenId;
+        this.tokenId = _tokenId;
         this.proposalTopicId = proposalTopicId;
     }
     async createProposal(title, description, durationDays = 7) {

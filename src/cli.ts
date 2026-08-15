@@ -66,11 +66,13 @@ program.command('register <name>').description('Register an AI agent on-chain')
       ownerId: hedera.getOperatorAccountId(),
       version: '1.0',
       pricing: { currency: 'HBAR', pricePerCall: opts.price, subscriptionTiers: [] },
-      capabilities: opts.capabilities ? opts.capabilities.split(',').map(s => s.trim()) : [],
+      capabilities: opts.capabilities ? opts.capabilities.split(',').map((s: string) => s.trim()) : [],
       ipfsCid: opts.cid,
       hcsTopicId: config.topics.manifestTopicId,
       status: 'active',
       ratings: { average: 0, count: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }, config.hedera.privateKey);
 
     console.log(chalk.green(`✓ Agent registered: ${id}`));

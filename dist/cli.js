@@ -5,12 +5,12 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import { Command } from 'commander';
-import { HederaClient } from '../hedera/client.js';
-import { AgentRegistry } from '../agent-registry.js';
-import { Marketplace } from '../marketplace.js';
-import { Governance } from '../governance.js';
+import { HederaClient } from './hedera/client.js';
+import { AgentRegistry } from './agent-registry.js';
+import { Marketplace } from './marketplace.js';
+import { Governance } from './governance.js';
 import chalk from 'chalk';
 function loadConfig() {
     const path = join(process.cwd(), 'nexuschain.config.yaml');
