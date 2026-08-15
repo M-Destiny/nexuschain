@@ -8,7 +8,7 @@ export class Governance {
   private proposalTopicId: string;
   private proposals = new Map<string, GovernanceProposal>();
 
-  constructor(hedera: HederaClient, tokenId: string, proposalTopicId: string) {
+  constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string) {
     this.hedera = hedera;
     this.tokenId = tokenId;
     this.proposalTopicId = proposalTopicId;

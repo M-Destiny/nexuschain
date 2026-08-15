@@ -1,5 +1,5 @@
 import { HederaClient } from './hedera/client.js';
-import type { MarketplaceListing, AgentMetadata } from './types.js';
+import type { MarketplaceListing } from './types.js';
 import { v4 as uuid } from 'uuid';
 
 export class Marketplace {
