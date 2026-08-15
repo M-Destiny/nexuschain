@@ -140,7 +140,7 @@ govCmd.command('vote').description('Vote on a proposal')
     const config = loadConfig();
     const hedera = new HederaClient(config.hedera);
     const governance = new Governance(hedera, config.contracts.governanceToken, config.topics.governanceTopicId);
-    await governance.vote(proposalId, opts.for ?? false, opts.amount);
+    await governance.vote(proposalId, process.argv.includes('--for'), opts.amount);
     console.log(chalk.green(`✓ Vote cast`));
 });
 program.command('balance').description('Check HBAR balance').action(async () => {

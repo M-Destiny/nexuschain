@@ -4,7 +4,7 @@ export class Governance {
     tokenId;
     proposalTopicId;
     proposals = new Map();
-    constructor(hedera, tokenId, proposalTopicId) {
+    constructor(hedera, _tokenId, proposalTopicId) {
         this.hedera = hedera;
         this.tokenId = tokenId;
         this.proposalTopicId = proposalTopicId;

@@ -5,7 +5,7 @@ export declare class Governance {
     private tokenId;
     private proposalTopicId;
     private proposals;
-    constructor(hedera: HederaClient, tokenId: string, proposalTopicId: string);
+    constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string);
     createProposal(title: string, description: string, durationDays?: number): Promise<string>;
     vote(proposalId: string, support: boolean, amount: string): Promise<void>;
     getProposal(proposalId: string): Promise<GovernanceProposal | null>;
