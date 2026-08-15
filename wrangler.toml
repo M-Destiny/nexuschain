@@ -1,0 +1,12 @@
+name = "nexuschain"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+account_id = ""
+
+[env.production]
+vars = { NODE_ENV = "production", HEDERA_NETWORK = "mainnet" }
+
+# Secrets
+# wrangler secret put HEDERA_ACCOUNT_ID
+# wrangler secret put HEDERA_PRIVATE_KEY
+# wrangler secret put MINIMAX_API_KEY
