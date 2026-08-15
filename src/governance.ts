@@ -10,7 +10,7 @@ export class Governance {
 
   constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string) {
     this.hedera = hedera;
-    this.tokenId = tokenId;
+    this.tokenId = _tokenId;
     this.proposalTopicId = proposalTopicId;
   }
 

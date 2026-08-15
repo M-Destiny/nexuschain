@@ -1,4 +1,4 @@
-import { HederaClient } from '../hedera/client.js';
+import { HederaClient } from './hedera/client.js';
 import type { AgentMetadata, AgentFilter } from './types.js';
 import { v4 as uuid } from 'uuid';
 
