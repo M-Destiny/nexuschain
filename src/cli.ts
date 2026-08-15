@@ -144,14 +144,16 @@ govCmd.command('create').description('Create a governance proposal')
 
 govCmd.command('vote').description('Vote on a proposal')
   .argument('<proposalId>')
-  .option('--for', 'Vote for')
+  .option('--for', 'Vote in favor')
+  .option('--against', 'Vote against')
   .option('--amount <hbar>', 'HBAR to stake', '1')
-  .action(async (proposalId, opts) => {
+  .action(async (proposalId: string, opts: { for?: boolean; against?: boolean; amount?: string }) => {
     const config = loadConfig();
     const hedera = new HederaClient(config.hedera);
     const governance = new Governance(hedera, config.contracts.governanceToken, config.topics.governanceTopicId);
-    await governance.vote(proposalId, Boolean(opts.for), opts.amount);
-    console.log(chalk.green(`✓ Vote cast`));
+    const voteFor = opts['for'] === true;
+    await governance.vote(proposalId, voteFor, opts.amount ?? '1');
+    console.log(chalk.green(`✓ Vote cast (${voteFor ? 'FOR' : 'AGAINST'})`));
   });
 
 program.command('balance').description('Check HBAR balance').action(async () => {

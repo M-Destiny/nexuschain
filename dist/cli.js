@@ -60,11 +60,13 @@ program.command('register <name>').description('Register an AI agent on-chain')
         ownerId: hedera.getOperatorAccountId(),
         version: '1.0',
         pricing: { currency: 'HBAR', pricePerCall: opts.price, subscriptionTiers: [] },
-        capabilities: opts.capabilities ? opts.capabilities.split(',').map(s => s.trim()) : [],
+        capabilities: opts.capabilities ? opts.capabilities.split(',').map((s) => s.trim()) : [],
         ipfsCid: opts.cid,
         hcsTopicId: config.topics.manifestTopicId,
         status: 'active',
         ratings: { average: 0, count: 0 },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
     }, config.hedera.privateKey);
     console.log(chalk.green(`✓ Agent registered: ${id}`));
     console.log(chalk.blue(`  View on: https://app.hedera.com/explorer/topic/${config.topics.manifestTopicId}`));
@@ -88,7 +90,7 @@ program.command('list').description('List all marketplace agents').action(async 
 });
 program.command('buy <agentId>').description('Purchase access to an agent')
     .option('--amount <hbar>', 'HBAR to pay', '1')
-    .action(async (agentId, opts) => {
+    .action(async (agentId, _opts) => {
     const config = loadConfig();
     const hedera = new HederaClient(config.hedera);
     const marketplace = new Marketplace(hedera, config.contracts.marketplace);
@@ -134,14 +136,16 @@ govCmd.command('create').description('Create a governance proposal')
 });
 govCmd.command('vote').description('Vote on a proposal')
     .argument('<proposalId>')
-    .option('--for', 'Vote for', false, (v) => v === 'true')
+    .option('--for', 'Vote in favor')
+    .option('--against', 'Vote against')
     .option('--amount <hbar>', 'HBAR to stake', '1')
     .action(async (proposalId, opts) => {
     const config = loadConfig();
     const hedera = new HederaClient(config.hedera);
     const governance = new Governance(hedera, config.contracts.governanceToken, config.topics.governanceTopicId);
-    await governance.vote(proposalId, process.argv.includes('--for'), opts.amount);
-    console.log(chalk.green(`✓ Vote cast`));
+    const voteFor = opts['for'] === true;
+    await governance.vote(proposalId, voteFor, opts.amount ?? '1');
+    console.log(chalk.green(`✓ Vote cast (${voteFor ? 'FOR' : 'AGAINST'})`));
 });
 program.command('balance').description('Check HBAR balance').action(async () => {
     const config = loadConfig();

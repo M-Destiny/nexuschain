@@ -1,13 +1,13 @@
 import { v4 as uuid } from 'uuid';
 export class Governance {
     hedera;
-    tokenId;
     proposalTopicId;
     proposals = new Map();
     constructor(hedera, _tokenId, proposalTopicId) {
         this.hedera = hedera;
-        this.tokenId = _tokenId;
         this.proposalTopicId = proposalTopicId;
+        // _tokenId reserved for future HTS governance-token integration (votes-weighted-by-HTS-balance)
+        void _tokenId;
     }
     async createProposal(title, description, durationDays = 7) {
         const id = uuid();

@@ -52,7 +52,7 @@ export class Marketplace {
             timestamp: new Date().toISOString(),
         }));
     }
-    async getRevenue(agentId) {
+    async getRevenue(_agentId) {
         // In production: query contract state for agent's accumulated HBAR
         return '0';
     }

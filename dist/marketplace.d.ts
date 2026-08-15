@@ -10,6 +10,6 @@ export declare class Marketplace {
     getListing(agentId: string): Promise<MarketplaceListing | null>;
     getAllListings(): Promise<MarketplaceListing[]>;
     rateAgent(agentId: string, rating: number): Promise<void>;
-    getRevenue(agentId: string): Promise<string>;
+    getRevenue(_agentId: string): Promise<string>;
 }
 //# sourceMappingURL=marketplace.d.ts.map

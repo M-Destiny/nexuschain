@@ -6,7 +6,6 @@ import {
   TopicMessageSubmitTransaction,
   TopicCreateTransaction,
   AccountBalanceQuery,
-  Status,
 } from '@hashgraph/sdk';
 
 export interface HederaClientOptions {

@@ -2,7 +2,6 @@ import { HederaClient } from './hedera/client.js';
 import type { GovernanceProposal } from './types.js';
 export declare class Governance {
     private hedera;
-    private tokenId;
     private proposalTopicId;
     private proposals;
     constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string);
