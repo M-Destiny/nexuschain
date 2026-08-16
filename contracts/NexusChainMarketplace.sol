@@ -31,6 +31,7 @@ contract NexusChainMarketplace {
         string ipfsCid;
         string[] capabilities;
         SubscriptionTier[] subscriptionTiers;
+        string version; // agent version (semver)
     }
 
     struct Listing {
@@ -101,11 +102,13 @@ contract NexusChainMarketplace {
         uint256 pricePerCall,
         string memory ipfsCid,
         string[] memory capabilities,
-        SubscriptionTier[] memory subscriptionTiers
+        SubscriptionTier[] memory subscriptionTiers,
+        string memory version
     ) external {
         require(bytes(agents[id].id).length == 0, "Agent ID already exists");
         require(pricePerCall > 0, "Price must be positive");
         require(bytes(name).length > 0, "Name required");
+        require(bytes(version).length > 0, "Version required");
 
         agents[id] = Agent({
             id: id,
@@ -118,7 +121,8 @@ contract NexusChainMarketplace {
             isActive: true,
             ipfsCid: ipfsCid,
             capabilities: capabilities,
-            subscriptionTiers: subscriptionTiers
+            subscriptionTiers: subscriptionTiers,
+            version: version
         });
 
         emit AgentRegistered(id, name, msg.sender, pricePerCall);
@@ -212,6 +216,31 @@ contract NexusChainMarketplace {
         return agent.ratingSum / agent.ratingCount;
     }
 
+    /**
+     * @dev Upgrade an agent to a new version + IPFS metadata CID.
+     * Only the owner can call. Downgrades are rejected (semver numeric comparison).
+     * Emits AgentUpgraded event for indexers/consumers.
+     */
+    function upgradeAgent(
+        string memory id,
+        string memory newVersion,
+        string memory newIpfsCid
+    ) external {
+        require(agents[id].owner == msg.sender, "Not the owner");
+        require(bytes(newVersion).length > 0, "New version required");
+        // Simple semver comparison: split by '.' and compare numeric parts
+        // Downgrades rejected to prevent rolling back to vulnerable builds
+        require(_isHigherVersion(newVersion, agents[id].version), "Version must be higher");
+
+        string memory previousVersion = agents[id].version;
+        agents[id].version = newVersion;
+        agents[id].ipfsCid = newIpfsCid;
+
+        emit AgentUpgraded(id, previousVersion, newVersion, newIpfsCid);
+    }
+
+    event AgentUpgraded(string indexed id, string fromVersion, string toVersion, string ipfsCid);
+
     // --- Governance ---
     function createProposal(
         string memory id,
@@ -281,4 +310,67 @@ contract NexusChainMarketplace {
     }
 
     receive() external payable {}
+
+    function _isHigherVersion(string memory a, string memory b) internal pure returns (bool) {
+        string[] memory pa = _split(a, '.');
+        string[] memory pb = _split(b, '.');
+        uint256 len = pa.length > pb.length ? pa.length : pb.length;
+        for (uint256 i = 0; i < len; i++) {
+            string memory na = i < pa.length ? pa[i] : "0";
+            string memory nb = i < pb.length ? pb[i] : "0";
+            uint256 naNum = _parseUint(na);
+            uint256 nbNum = _parseUint(nb);
+            if (naNum != 0 || nbNum != 0) { // if both parsed as numbers
+                if (naNum != nbNum) return naNum > nbNum;
+            } else { // fallback to lexicographic using keccak256
+                if (keccak256(abi.encodePacked(na)) != keccak256(abi.encodePacked(nb))) {
+                    return uint256(keccak256(abi.encodePacked(na))) > uint256(keccak256(abi.encodePacked(nb)));
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @dev Split string by delimiter (returns array).
+     */
+    function _split(string memory s, string memory delim) internal pure returns (string[] memory) {
+        // Count delimiters
+        uint256 count = 1;
+        for (uint256 i = 0; i < bytes(s).length; i++) {
+            if (bytes(s)[i] == bytes(delim)[0]) count++;
+        }
+        string[] memory parts = new string[](count);
+        uint256 partIdx = 0;
+        string memory current = "";
+        for (uint256 i = 0; i < bytes(s).length; i++) {
+            bytes1 c = bytes(s)[i];
+            if (c == bytes(delim)[0]) {
+                parts[partIdx] = current;
+                current = "";
+                partIdx++;
+            } else {
+                current = string(abi.encodePacked(current, string(bytes1(c))));
+            }
+        }
+        parts[partIdx] = current;
+        return parts;
+    }
+
+    /**
+     * @dev Parse string as uint256, returns 0 if not a valid number.
+     */
+    function _parseUint(string memory s) internal pure returns (uint256) {
+        if (bytes(s).length == 0) return 0;
+        uint256 result = 0;
+        for (uint256 i = 0; i < bytes(s).length; i++) {
+            bytes1 c = bytes(s)[i];
+            if (c >= '0' && c <= '9') {
+                result = result * 10 + uint256(uint8(c) - uint8('0'));
+            } else {
+                return 0; // not a pure number
+            }
+        }
+        return result;
+    }
 }
