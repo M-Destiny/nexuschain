@@ -22,6 +22,13 @@ function makeAgent(overrides: Partial<AgentMetadata> = {}): AgentMetadata {
   };
 }
 
+// Helper: registerAgent takes Omit<AgentMetadata, 'id'>. Strip the placeholder id.
+function registerArgs(overrides: Partial<AgentMetadata> = {}) {
+  const { id: _drop, ...rest } = makeAgent(overrides);
+  void _drop;
+  return [rest, 'priv-key'] as const;
+}
+
 describe('AgentRegistry', () => {
   let hedera: MockHedera;
   let registry: AgentRegistry;
@@ -32,10 +39,8 @@ describe('AgentRegistry', () => {
   });
 
   it('registerAgent assigns a uuid and publishes an AGENT_REGISTERED event', async () => {
-    const id = await registry.registerAgent(
-      { ...makeAgent(), id: '' as any }, // id will be replaced by uuid
-      'priv-key',
-    );
+    const [args, key] = registerArgs();
+    const id = await registry.registerAgent(args, key);
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
     expect(hedera.publishMessage).toHaveBeenCalledTimes(1);
     const [topicId, payload] = hedera.publishMessage.mock.calls[0];
@@ -47,8 +52,20 @@ describe('AgentRegistry', () => {
     expect(parsed.capabilities).toEqual(['code-gen', 'text-analysis']);
   });
 
+  it('registerAgent is defensive against caller-supplied id (always server-assigns)', async () => {
+    const [args, key] = registerArgs();
+    // Force an id collision attempt
+    const evilArgs = { ...args, id: 'attacker-supplied' as any };
+    const id = await registry.registerAgent(evilArgs, key);
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(id).not.toBe('attacker-supplied');
+    const stored = await registry.getAgent(id);
+    expect(stored?.id).toBe(id);
+  });
+
   it('getAgent returns the registered agent', async () => {
-    const id = await registry.registerAgent(makeAgent({ name: 'Y' }), 'k');
+    const [args, key] = registerArgs({ name: 'Y' });
+    const id = await registry.registerAgent(args, key);
     const got = await registry.getAgent(id);
     expect(got?.name).toBe('Y');
   });
@@ -58,7 +75,8 @@ describe('AgentRegistry', () => {
   });
 
   it('updateAgent merges fields and refreshes updatedAt', async () => {
-    const id = await registry.registerAgent(makeAgent(), 'k');
+    const [args, key] = registerArgs();
+    const id = await registry.registerAgent(args, key);
     const before = await registry.getAgent(id);
     await new Promise((r) => setTimeout(r, 5));
     await registry.updateAgent(id, { description: 'New desc', version: '1.1.0' });
@@ -76,7 +94,8 @@ describe('AgentRegistry', () => {
   });
 
   it('deactivateAgent sets status to deprecated and emits event', async () => {
-    const id = await registry.registerAgent(makeAgent(), 'k');
+    const [args, key] = registerArgs();
+    const id = await registry.registerAgent(args, key);
     await registry.deactivateAgent(id);
     const got = await registry.getAgent(id);
     expect(got?.status).toBe('deprecated');
@@ -85,7 +104,8 @@ describe('AgentRegistry', () => {
   });
 
   it('rateAgent updates the rolling average and count', async () => {
-    const id = await registry.registerAgent(makeAgent(), 'k');
+    const [args, key] = registerArgs();
+    const id = await registry.registerAgent(args, key);
     await registry.rateAgent(id, 5);
     await registry.rateAgent(id, 3);
     await registry.rateAgent(id, 4);
@@ -99,8 +119,10 @@ describe('AgentRegistry', () => {
   });
 
   it('listAgents filters by capability, minRating, and status', async () => {
-    const a1 = await registry.registerAgent(makeAgent({ name: 'A1', capabilities: ['code-gen'] }), 'k');
-    const a2 = await registry.registerAgent(makeAgent({ name: 'A2', capabilities: ['image-gen'] }), 'k');
+    const [a1Args, a1Key] = registerArgs({ name: 'A1', capabilities: ['code-gen'] });
+    const a1 = await registry.registerAgent(a1Args, a1Key);
+    const [a2Args, a2Key] = registerArgs({ name: 'A2', capabilities: ['image-gen'] });
+    const a2 = await registry.registerAgent(a2Args, a2Key);
     await registry.rateAgent(a1, 5);
     await registry.rateAgent(a1, 5);
     await registry.rateAgent(a2, 3);
@@ -116,8 +138,10 @@ describe('AgentRegistry', () => {
   });
 
   it('listAgents sorts by rating descending', async () => {
-    const a1 = await registry.registerAgent(makeAgent({ name: 'Low' }), 'k');
-    const a2 = await registry.registerAgent(makeAgent({ name: 'High' }), 'k');
+    const [a1Args, a1Key] = registerArgs({ name: 'Low' });
+    const a1 = await registry.registerAgent(a1Args, a1Key);
+    const [a2Args, a2Key] = registerArgs({ name: 'High' });
+    const a2 = await registry.registerAgent(a2Args, a2Key);
     await registry.rateAgent(a1, 2);
     await registry.rateAgent(a2, 5);
     const all = await registry.listAgents();
@@ -126,7 +150,8 @@ describe('AgentRegistry', () => {
   });
 
   it('upgradeAgent increments version and publishes an UPGRADE event', async () => {
-    const id = await registry.registerAgent(makeAgent({ version: '1.0.0' }), 'k');
+    const [args, key] = registerArgs({ version: '1.0.0' });
+    const id = await registry.registerAgent(args, key);
     await registry.upgradeAgent(id, '1.1.0', 'bafyupgradecid');
     const got = await registry.getAgent(id);
     expect(got?.version).toBe('1.1.0');
@@ -140,7 +165,8 @@ describe('AgentRegistry', () => {
   });
 
   it('upgradeAgent rejects empty or downgraded version', async () => {
-    const id = await registry.registerAgent(makeAgent({ version: '2.0.0' }), 'k');
+    const [args, key] = registerArgs({ version: '2.0.0' });
+    const id = await registry.registerAgent(args, key);
     await expect(registry.upgradeAgent(id, '1.0.0', 'c')).rejects.toThrow(/higher than current/);
     await expect(registry.upgradeAgent(id, '', 'c')).rejects.toThrow(/required/);
   });
@@ -154,6 +180,7 @@ describe('AgentRegistry', () => {
     // (covered in tests/hedera-client.test.ts). Here we verify registry
     // doesn't swallow the error.
     hedera.failNextPublishNTimes(1, 'INSUFFICIENT_ACCOUNT_BALANCE');
-    await expect(registry.registerAgent(makeAgent(), 'k')).rejects.toThrow(/INSUFFICIENT_ACCOUNT_BALANCE/);
+    const [args, key] = registerArgs();
+    await expect(registry.registerAgent(args, key)).rejects.toThrow(/INSUFFICIENT_ACCOUNT_BALANCE/);
   });
 });

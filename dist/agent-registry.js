@@ -9,13 +9,30 @@ export class AgentRegistry {
     }
     async registerAgent(metadata, _privateKey) {
         const id = uuid();
-        const agent = { id, ...metadata, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        const now = new Date().toISOString();
+        // server-assigned `id` always wins — never let a caller-supplied id
+        // (or accidental `id: ''` in a test fixture) overwrite the real one.
+        const agent = {
+            ...metadata,
+            id,
+            createdAt: now,
+            updatedAt: now,
+        };
         this.agents.set(id, agent);
         await this.hedera.publishMessage(this.topicId, JSON.stringify({
             type: 'AGENT_REGISTERED',
             id,
-            timestamp: agent.createdAt,
-            ...metadata,
+            timestamp: now,
+            name: agent.name,
+            description: agent.description,
+            ownerId: agent.ownerId,
+            version: agent.version,
+            pricing: agent.pricing,
+            capabilities: agent.capabilities,
+            ipfsCid: agent.ipfsCid,
+            hcsTopicId: agent.hcsTopicId,
+            status: agent.status,
+            ratings: agent.ratings,
         }));
         return id;
     }
