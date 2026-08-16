@@ -59,7 +59,7 @@ app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-function createServer(config?: NexusChainConfig): express.Express {
+function createServer(_config?: NexusChainConfig): express.Express {
   // If config provided, we could initialize real services here
   // For now, just return the app with default metrics
   return app;
