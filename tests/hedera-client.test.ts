@@ -1,7 +1,6 @@
 // Inline mock factory — vi.mock is hoisted, so the SDK must not reference
 // any top-level const. Dynamic calls inside the factory configure behaviour
 // that the tests then drive via the exported `getExecuteMock` / `setExecute`.
-let publishExecuteMock: (() => Promise<any>) | null = null;
 let executeMock: (() => Promise<any>) | null = null;
 let createTopicReceipt: () => { topicId: { toString: () => string } } = () => ({
   topicId: { toString: () => '0.0.9999' },
@@ -42,7 +41,7 @@ vi.mock('@hashgraph/sdk', () => {
     TopicId: { fromString: (s: string) => ({ toString: () => s }) },
     TopicMessageSubmitTransaction: function () {
       const obj = makeChainable();
-      obj.execute = async () => (publishExecuteMock ? publishExecuteMock() : defaultReceipt());
+      obj.execute = async () => (executeMock ? executeMock() : defaultReceipt());
       return obj;
     },
     TopicCreateTransaction: function () {
@@ -54,9 +53,7 @@ vi.mock('@hashgraph/sdk', () => {
     },
     AccountBalanceQuery: function () {
       const obj = makeChainable();
-      obj.execute = async () => ({
-        getReceipt: async () => balanceReceipt(),
-      });
+      obj.execute = async () => balanceReceipt();
       return obj;
     },
   };
