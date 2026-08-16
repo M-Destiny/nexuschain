@@ -3,34 +3,47 @@ import type { MarketplaceListing, AgentFilter, AgentMetadata } from './types.js'
 import { v4 as uuid } from 'uuid';
 import { Counter, Registry } from 'prom-client';
 
-// Import shared metrics from server
-import { metricsRegistry } from './server.js';
+// Prometheus metrics registry - can be shared or per-instance
+let _metricsRegistry: Registry | null = null;
+
+function getMetricsRegistry(): Registry {
+  if (!_metricsRegistry) {
+    _metricsRegistry = new Registry();
+  }
+  return _metricsRegistry;
+}
+
+function setMetricsRegistry(registry: Registry): void {
+  _metricsRegistry = registry;
+}
 
 // Prometheus metrics — use shared registry
 const mpListingsTotal = new Counter({
   name: 'marketplace_listings_total',
   help: 'Total number of agent listings created',
-  registers: [metricsRegistry],
+  registers: [getMetricsRegistry()],
 });
 
 const mpPurchasesTotal = new Counter({
   name: 'marketplace_purchases_total',
   help: 'Total number of agent purchases',
-  registers: [metricsRegistry],
+  registers: [getMetricsRegistry()],
 });
 
 const mpViewsTotal = new Counter({
   name: 'marketplace_views_total',
   help: 'Total number of listing views',
-  registers: [metricsRegistry],
+  registers: [getMetricsRegistry()],
 });
 
 const mpRatingEventsTotal = new Counter({
   name: 'marketplace_ratings_total',
   help: 'Total number of rating events',
   labelNames: ['rating'],
-  registers: [metricsRegistry],
+  registers: [getMetricsRegistry()],
 });
+
+export { getMetricsRegistry, setMetricsRegistry };
 
 export class Marketplace {
   private hedera: HederaClient;
@@ -152,11 +165,6 @@ export class Marketplace {
 
   /** Expose metrics registry for Prometheus scraping. */
   getMetricsRegistry(): Registry {
-    const registry = new Registry();
-    registry.registerMetric(mpListingsTotal);
-    registry.registerMetric(mpPurchasesTotal);
-    registry.registerMetric(mpViewsTotal);
-    registry.registerMetric(mpRatingEventsTotal);
-    return registry;
+    return getMetricsRegistry();
   }
 }
