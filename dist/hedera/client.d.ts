@@ -9,6 +9,8 @@ export interface HederaClientOptions {
     backoffBaseMs?: number;
     /** Circuit-breaker failure threshold before fast-fail for 30s. Default 5. */
     circuitFailureThreshold?: number;
+    /** Pinata JWT for IPFS pinning (optional). */
+    pinataJwt?: string;
 }
 /**
  * Thin wrapper around the Hedera Consensus/Token Service SDK that adds:
