@@ -150,11 +150,11 @@ describe('HederaClient', () => {
       backoffBaseMs: 1,
       circuitFailureThreshold: 2,
     });
-    // Failure 1 — circuit still below threshold
+    // First call: retries once (maxRetries=1), fails twice → circuit opens at threshold=2
     await expect(c.publishMessage('0.0.7', 'a')).rejects.toThrow(/UNAVAILABLE/);
-    // Failure 2 — circuit opens
-    await expect(c.publishMessage('0.0.7', 'b')).rejects.toThrow(/UNAVAILABLE/);
-    // Next call should fast-fail without invoking execute further
+    // Second call: circuit is now OPEN → fast-fails with circuit breaker error
+    await expect(c.publishMessage('0.0.7', 'b')).rejects.toThrow(/circuit breaker is OPEN/);
+    // Third call: still fast-fails
     await expect(c.publishMessage('0.0.7', 'c')).rejects.toThrow(/circuit breaker is OPEN/);
   });
 
