@@ -3,17 +3,43 @@
  * Exposes Prometheus metrics and health check endpoints for deployment platforms.
  */
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { Registry, collectDefaultMetrics } from 'prom-client';
+import { Registry, collectDefaultMetrics, Counter } from 'prom-client';
 import type { NexusChainConfig } from './types.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 8080;
 
-// Collect default Node.js metrics (CPU, memory, event loop, etc.)
-collectDefaultMetrics();
-
 // Shared metrics registry (also used by Marketplace)
 const metricsRegistry = new Registry();
+
+// Collect default Node.js metrics (CPU, memory, event loop, etc.)
+collectDefaultMetrics({ register: metricsRegistry });
+
+// Marketplace metrics
+const mpListingsTotal = new Counter({
+  name: 'marketplace_listings_total',
+  help: 'Total number of agent listings created',
+  registers: [metricsRegistry],
+});
+
+const mpPurchasesTotal = new Counter({
+  name: 'marketplace_purchases_total',
+  help: 'Total number of agent purchases',
+  registers: [metricsRegistry],
+});
+
+const mpViewsTotal = new Counter({
+  name: 'marketplace_views_total',
+  help: 'Total number of listing views',
+  registers: [metricsRegistry],
+});
+
+const mpRatingEventsTotal = new Counter({
+  name: 'marketplace_ratings_total',
+  help: 'Total number of rating events',
+  labelNames: ['rating'],
+  registers: [metricsRegistry],
+});
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
