@@ -16,25 +16,25 @@ const metricsRegistry = new Registry();
 collectDefaultMetrics({ register: metricsRegistry });
 
 // Marketplace metrics
-const mpListingsTotal = new Counter({
+const _mpListingsTotal = new Counter({
   name: 'marketplace_listings_total',
   help: 'Total number of agent listings created',
   registers: [metricsRegistry],
 });
 
-const mpPurchasesTotal = new Counter({
+const _mpPurchasesTotal = new Counter({
   name: 'marketplace_purchases_total',
   help: 'Total number of agent purchases',
   registers: [metricsRegistry],
 });
 
-const mpViewsTotal = new Counter({
+const _mpViewsTotal = new Counter({
   name: 'marketplace_views_total',
   help: 'Total number of listing views',
   registers: [metricsRegistry],
 });
 
-const mpRatingEventsTotal = new Counter({
+const _mpRatingEventsTotal = new Counter({
   name: 'marketplace_ratings_total',
   help: 'Total number of rating events',
   labelNames: ['rating'],
