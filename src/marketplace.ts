@@ -17,31 +17,56 @@ function setMetricsRegistry(registry: Registry): void {
   _metricsRegistry = registry;
 }
 
-// Prometheus metrics — use shared registry
-const mpListingsTotal = new Counter({
-  name: 'marketplace_listings_total',
-  help: 'Total number of agent listings created',
-  registers: [getMetricsRegistry()],
-});
+// Lazy metric creation - metrics are created when first accessed
+let _mpListingsTotal: Counter | null = null;
+let _mpPurchasesTotal: Counter | null = null;
+let _mpViewsTotal: Counter | null = null;
+let _mpRatingEventsTotal: Counter | null = null;
 
-const mpPurchasesTotal = new Counter({
-  name: 'marketplace_purchases_total',
-  help: 'Total number of agent purchases',
-  registers: [getMetricsRegistry()],
-});
+function mpListingsTotal(): Counter {
+  if (!_mpListingsTotal) {
+    _mpListingsTotal = new Counter({
+      name: 'marketplace_listings_total',
+      help: 'Total number of agent listings created',
+      registers: [getMetricsRegistry()],
+    });
+  }
+  return _mpListingsTotal;
+}
 
-const mpViewsTotal = new Counter({
-  name: 'marketplace_views_total',
-  help: 'Total number of listing views',
-  registers: [getMetricsRegistry()],
-});
+function mpPurchasesTotal(): Counter {
+  if (!_mpPurchasesTotal) {
+    _mpPurchasesTotal = new Counter({
+      name: 'marketplace_purchases_total',
+      help: 'Total number of agent purchases',
+      registers: [getMetricsRegistry()],
+    });
+  }
+  return _mpPurchasesTotal;
+}
 
-const mpRatingEventsTotal = new Counter({
-  name: 'marketplace_ratings_total',
-  help: 'Total number of rating events',
-  labelNames: ['rating'],
-  registers: [getMetricsRegistry()],
-});
+function mpViewsTotal(): Counter {
+  if (!_mpViewsTotal) {
+    _mpViewsTotal = new Counter({
+      name: 'marketplace_views_total',
+      help: 'Total number of listing views',
+      registers: [getMetricsRegistry()],
+    });
+  }
+  return _mpViewsTotal;
+}
+
+function mpRatingEventsTotal(): Counter {
+  if (!_mpRatingEventsTotal) {
+    _mpRatingEventsTotal = new Counter({
+      name: 'marketplace_ratings_total',
+      help: 'Total number of rating events',
+      labelNames: ['rating'],
+      registers: [getMetricsRegistry()],
+    });
+  }
+  return _mpRatingEventsTotal;
+}
 
 export { getMetricsRegistry, setMetricsRegistry };
 
@@ -72,7 +97,7 @@ export class Marketplace {
       views: 0,
     };
     this.listings.set(listingId, listing);
-    mpListingsTotal.inc();
+    mpListingsTotal().inc();
     return listingId;
   }
 
