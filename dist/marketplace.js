@@ -1,22 +1,27 @@
 import { v4 as uuid } from 'uuid';
-import { Registry } from 'prom-client';
-// Prometheus metrics
-const mpListingsTotal = new Registry().counter({
+import { Counter, Registry } from 'prom-client';
+// Prometheus metrics — share a single Registry (prom-client v15 removed Registry.counter shortcut)
+const metricsRegistry = new Registry();
+const mpListingsTotal = new Counter({
     name: 'marketplace_listings_total',
     help: 'Total number of agent listings created',
+    registers: [metricsRegistry],
 });
-const mpPurchasesTotal = new Registry().counter({
+const mpPurchasesTotal = new Counter({
     name: 'marketplace_purchases_total',
     help: 'Total number of agent purchases',
+    registers: [metricsRegistry],
 });
-const mpViewsTotal = new Registry().counter({
+const mpViewsTotal = new Counter({
     name: 'marketplace_views_total',
     help: 'Total number of listing views',
+    registers: [metricsRegistry],
 });
-const mpRatingEventsTotal = new Registry().counter({
+const mpRatingEventsTotal = new Counter({
     name: 'marketplace_ratings_total',
     help: 'Total number of rating events',
     labelNames: ['rating'],
+    registers: [metricsRegistry],
 });
 export class Marketplace {
     hedera;
