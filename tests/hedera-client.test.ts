@@ -1,7 +1,6 @@
-// Inline mock factory — vi.mock is hoisted, so the SDK must not reference
-// any top-level const. Dynamic calls inside the factory configure behaviour
-// that the tests then drive via the exported `getExecuteMock` / `setExecute`.
-let executeMock: (() => Promise<any>) | null = null;
+// vi.mock is hoisted — the mock factory must not reference top-level const.
+// Tests call the exported `setExecute*` helpers to configure behaviour.
+let executeBehaviour: (() => Promise<any>) | null = null;
 let createTopicReceipt: () => { topicId: { toString: () => string } } = () => ({
   topicId: { toString: () => '0.0.9999' },
 });
@@ -12,43 +11,67 @@ let balanceReceipt: () => { hbars: { toBigNumber: () => { toNumber: () => number
   },
 });
 
-vi.mock('@hashgraph/sdk', () => {
-  const chainable = () => {
-    const obj: any = {};
-    obj.setTopicId = () => obj;
-    obj.setMessage = () => obj;
-    obj.setTopicMemo = () => obj;
-    obj.setAccountId = () => obj;
-    obj.execute = async () => (executeMock ? executeMock() : defaultReceipt());
-    return obj;
+function makeTxn() {
+  const obj: any = {};
+  obj.setTopicId = () => obj;
+  obj.setMessage = () => obj;
+  obj.setTopicMemo = () => obj;
+  obj.setAccountId = () => obj;
+  obj.execute = async () => {
+    if (!executeBehaviour) {
+      return {
+        getReceipt: async () => ({
+          topicSequenceNumber: { toString: () => '1' },
+        }),
+      };
+    }
+    return executeBehaviour();
   };
-  const defaultReceipt = () => ({
-    getReceipt: async () => ({
-      topicSequenceNumber: { toString: () => '1' },
-    }),
-  });
-  return {
-    Client: {
-      forNetwork: () => ({
-        setOperator: () => undefined,
-        close: () => undefined,
-      }),
-    },
-    AccountId: function (shard: number, realm: number, num: number) {
-      return { toString: () => `${shard}.${realm}.${num}` };
-    },
-    PrivateKey: { fromString: () => ({}) },
-    TopicId: { fromString: (s: string) => ({ toString: () => s }) },
-    TopicMessageSubmitTransaction: chainable,
-    TopicCreateTransaction: chainable,
-    AccountBalanceQuery: chainable,
-  };
-});
+  return obj;
+}
 
-// Helper for tests: set what `executeMock` should return / throw.
+function makeQuery() {
+  const obj: any = {};
+  obj.setAccountId = () => obj;
+  obj.execute = async () => {
+    const r = balanceReceipt();
+    return {
+      getReceipt: async () => r, // unused for queries
+      hbars: r.hbars,
+    };
+  };
+  return obj;
+}
+
+vi.mock('@hashgraph/sdk', () => ({
+  Client: {
+    forNetwork: () => ({
+      setOperator: () => undefined,
+      close: () => undefined,
+    }),
+  },
+  AccountId: function (shard: number, realm: number, num: number) {
+    return { toString: () => `${shard}.${realm}.${num}` };
+  },
+  PrivateKey: { fromString: () => ({}) },
+  TopicId: { fromString: (s: string) => ({ toString: () => s }) },
+  TopicMessageSubmitTransaction: function () { return makeTxn(); },
+  TopicCreateTransaction: function () {
+    const t = makeTxn();
+    t.execute = async () => ({
+      getReceipt: async () => {
+        const r = createTopicReceipt();
+        return r;
+      },
+    });
+    return t;
+  },
+  AccountBalanceQuery: function () { return makeQuery(); },
+}));
+
 function setExecuteSequence(...behaviours: Array<'success' | { throw: Error }>) {
   let i = 0;
-  executeMock = async () => {
+  executeBehaviour = async () => {
     const b = behaviours[i++] ?? behaviours[behaviours.length - 1];
     if (b === 'success') {
       return {
@@ -62,7 +85,7 @@ function setExecuteSequence(...behaviours: Array<'success' | { throw: Error }>) 
 }
 
 function alwaysExecute(behaviour: 'success' | { throw: Error }) {
-  executeMock = async () => {
+  executeBehaviour = async () => {
     if (behaviour === 'success') {
       return {
         getReceipt: async () => ({
@@ -84,7 +107,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HederaClient } from '../src/hedera/client.js';
 
 beforeEach(() => {
-  executeMock = null;
+  executeBehaviour = null;
   createTopicReceipt = () => ({ topicId: { toString: () => '0.0.9999' } });
   balanceReceipt = () => ({
     hbars: {
@@ -132,15 +155,12 @@ describe('HederaClient', () => {
       accountId: '0.0.1001',
       privateKey: 'fake-key',
       network: 'testnet',
-      maxRetries: 1,
+      maxRetries: 0,
       backoffBaseMs: 1,
       circuitFailureThreshold: 2,
     });
-    // Failure 1 — circuit still below threshold
     await expect(c.publishMessage('0.0.7', 'a')).rejects.toThrow(/UNAVAILABLE/);
-    // Failure 2 — circuit opens
     await expect(c.publishMessage('0.0.7', 'b')).rejects.toThrow(/UNAVAILABLE/);
-    // Next call should fast-fail without invoking execute further
     await expect(c.publishMessage('0.0.7', 'c')).rejects.toThrow(/circuit breaker is OPEN/);
   });
 
