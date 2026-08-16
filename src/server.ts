@@ -16,30 +16,33 @@ const metricsRegistry = new Registry();
 collectDefaultMetrics({ register: metricsRegistry });
 
 // Marketplace metrics
-const _mpListingsTotal = new Counter({
+const mpListingsTotal = new Counter({
   name: 'marketplace_listings_total',
   help: 'Total number of agent listings created',
   registers: [metricsRegistry],
 });
 
-const _mpPurchasesTotal = new Counter({
+const mpPurchasesTotal = new Counter({
   name: 'marketplace_purchases_total',
   help: 'Total number of agent purchases',
   registers: [metricsRegistry],
 });
 
-const _mpViewsTotal = new Counter({
+const mpViewsTotal = new Counter({
   name: 'marketplace_views_total',
   help: 'Total number of listing views',
   registers: [metricsRegistry],
 });
 
-const _mpRatingEventsTotal = new Counter({
+const mpRatingEventsTotal = new Counter({
   name: 'marketplace_ratings_total',
   help: 'Total number of rating events',
   labelNames: ['rating'],
   registers: [metricsRegistry],
 });
+
+// Suppress unused local warnings (registered via `registers` option above)
+void [mpListingsTotal, mpPurchasesTotal, mpViewsTotal, mpRatingEventsTotal];
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
