@@ -240,4 +240,92 @@ describe('HederaClient', () => {
       globalThis.fetch = realFetch;
     }
   });
+
+  // --- IPFS Pinning Tests ---
+  describe('pinToIPFS', () => {
+    it('pins JSON data to IPFS via Web3.Storage and returns CID', async () => {
+      const realFetch = globalThis.fetch;
+      const fakeFetch = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ cid: 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi', size: 1234 }),
+      })) as any;
+      globalThis.fetch = fakeFetch;
+      try {
+        const c = new HederaClient({
+          accountId: '0.0.12345',
+          privateKey: 'k',
+          network: 'testnet',
+          web3StorageToken: 'test-token-123',
+        });
+        const result = await c.pinToIPFS({ hello: 'world', number: 42 });
+        expect(result.cid).toBe('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+        expect(result.size).toBe(1234);
+        expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(fakeFetch).toHaveBeenCalledTimes(1);
+        const [url, init] = fakeFetch.mock.calls[0];
+        expect(url).toBe('https://api.web3.storage/upload');
+        expect(init.method).toBe('POST');
+        expect(init.headers.Authorization).toBe('Bearer test-token-123');
+        expect(init.headers['Content-Type']).toBe('application/json');
+        const body = JSON.parse(init.body);
+        expect(body).toEqual({ hello: 'world', number: 42 });
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+
+    it('throws when web3StorageToken is not configured', async () => {
+      const c = new HederaClient({
+        accountId: '0.0.12345',
+        privateKey: 'k',
+        network: 'testnet',
+        // no web3StorageToken
+      });
+      await expect(c.pinToIPFS({ test: 'data' })).rejects.toThrow(/Web3.Storage token not configured/);
+    });
+
+    it('throws on Web3.Storage API error with status and body', async () => {
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async () => ({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => 'Invalid API token',
+      })) as any;
+      try {
+        const c = new HederaClient({
+          accountId: '0.0.12345',
+          privateKey: 'k',
+          network: 'testnet',
+          web3StorageToken: 'bad-token',
+        });
+        await expect(c.pinToIPFS({ test: 'data' })).rejects.toThrow(/401/);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+
+    it('handles large JSON payloads correctly', async () => {
+      const realFetch = globalThis.fetch;
+      const largeData = { items: Array.from({ length: 1000 }, (_, i) => ({ id: i, data: 'x'.repeat(100) })) };
+      const fakeFetch = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ cid: 'bafylargecid123', size: 102400 }),
+      })) as any;
+      globalThis.fetch = fakeFetch;
+      try {
+        const c = new HederaClient({
+          accountId: '0.0.12345',
+          privateKey: 'k',
+          network: 'testnet',
+          web3StorageToken: 'test-token',
+        });
+        const result = await c.pinToIPFS(largeData);
+        expect(result.cid).toBe('bafylargecid123');
+        expect(fakeFetch).toHaveBeenCalledTimes(1);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+  });
 });
