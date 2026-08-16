@@ -25,6 +25,7 @@ export declare class HederaClient {
     private client;
     private accountId;
     private privateKey;
+    private network;
     private maxRetries;
     private backoffBaseMs;
     private circuitFailureThreshold;
@@ -42,6 +43,21 @@ export declare class HederaClient {
     }>;
     getOperatorAccountId(): string;
     getClient(): Client;
+    /**
+     * Request HBAR from the Hedera testnet faucet for the operator account.
+     * Useful for spinning up dev environments without manually pasting
+     * account IDs into the web form.
+     *
+     * Refuses to run on mainnet or previewnet — the testnet faucet only
+     * funds testnet accounts, and silently requesting on mainnet would be
+     * a fatal operational mistake.
+     *
+     * @throws if the network is not testnet, or the faucet returns non-OK.
+     */
+    fundFromTestnetFaucet(): Promise<{
+        status: string;
+        accountId: string;
+    }>;
     private executeWithBreaker;
     private assertCircuitClosed;
     private recordSuccess;

@@ -51,7 +51,6 @@ describe('Governance', () => {
 
   it('vote rejects past-deadline proposals and auto-rejects them', async () => {
     const id = await gov.createProposal('T', 'D', 7);
-    // Force the deadline into the past
     const p = await gov.getProposal(id);
     p!.deadline = new Date(Date.now() - 1000).toISOString();
     await gov.vote(id, true, '1');
@@ -60,7 +59,6 @@ describe('Governance', () => {
 
   it('executeProposal passes when forVotes > againstVotes and quorum met', async () => {
     const id = await gov.createProposal('T', 'D', 7);
-    // quorum is 10_000_000 tinybars; total votes must reach it
     await gov.vote(id, true, '6000000');
     await gov.vote(id, false, '4000001');
     await gov.executeProposal(id);
@@ -70,7 +68,7 @@ describe('Governance', () => {
 
   it('executeProposal rejects when quorum not met', async () => {
     const id = await gov.createProposal('T', 'D', 7);
-    await gov.vote(id, true, '100'); // quorum is 10_000_000
+    await gov.vote(id, true, '100');
     await gov.executeProposal(id);
     const p = await gov.getProposal(id);
     expect(p?.status).toBe('rejected');
@@ -93,5 +91,46 @@ describe('Governance', () => {
     await gov.createProposal('T2', 'D', 7);
     await gov.executeProposal(id1);
     expect(gov.getActiveProposals()).toHaveLength(1);
+  });
+
+  it('executeProposal sets executableAt = now + timeLockHours for passed proposals', async () => {
+    const id = await gov.createProposal('T', 'D', 7);
+    await gov.vote(id, true, '6000000');
+    await gov.vote(id, false, '4000001');
+    const before = Date.now();
+    await gov.executeProposal(id);
+    const p = await gov.getProposal(id);
+    expect(p?.status).toBe('passed');
+    expect(p?.executableAt).toBeDefined();
+    const execMs = new Date(p!.executableAt!).getTime();
+    // Default timeLockHours is 48
+    expect(execMs - before).toBeGreaterThan(47 * 3600_000);
+    expect(execMs - before).toBeLessThan(49 * 3600_000);
+  });
+
+  it('finalizeProposal throws before time-lock elapses', async () => {
+    const id = await gov.createProposal('T', 'D', 7);
+    await gov.vote(id, true, '6000000');
+    await gov.vote(id, false, '4000001');
+    await gov.executeProposal(id);
+    await expect(gov.finalizeProposal(id)).rejects.toThrow(/Time-lock not yet elapsed/);
+  });
+
+  it('finalizeProposal succeeds after time-lock elapses and marks executed', async () => {
+    const customGov = new Governance(hedera as any, '0.0.11111', '0.0.33333', { timeLockHours: 0 });
+    const id = await customGov.createProposal('T', 'D', 7);
+    await customGov.vote(id, true, '6000000');
+    await customGov.vote(id, false, '4000001');
+    await customGov.executeProposal(id);
+    await customGov.finalizeProposal(id);
+    const p = await customGov.getProposal(id);
+    expect(p?.status).toBe('executed');
+  });
+
+  it('finalizeProposal rejects proposals that are not in passed state', async () => {
+    const id = await gov.createProposal('T', 'D', 7);
+    await gov.vote(id, true, '100'); // below quorum
+    await gov.executeProposal(id);
+    await expect(gov.finalizeProposal(id)).rejects.toThrow(/not in 'passed' state/);
   });
 });
