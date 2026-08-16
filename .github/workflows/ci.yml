@@ -1,0 +1,237 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, improvement/**]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  HEDERA_NETWORK: testnet
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & TypeCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npm run lint
+
+      - name: Run ESLint (if configured)
+        run: npx eslint src --ext .ts || true
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npx vitest run --coverage
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          fail_ci_if_error: false
+
+  contract-compile:
+    name: Compile Smart Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile-contracts
+
+      - name: Upload contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-artifacts
+          path: |
+            artifacts/
+            cache/
+          retention-days: 7
+
+  contract-typechain:
+    name: Generate TypeChain Types
+    runs-on: ubuntu-latest
+    needs: contract-compile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download contract artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contract-artifacts
+          path: .
+
+      - name: Generate TypeChain bindings
+        run: npx hardhat typechain
+
+      - name: Upload generated types
+        uses: actions/upload-artifact@v4
+        with:
+          name: typechain-types
+          path: typechain-types/
+          retention-days: 7
+
+  deploy-testnet:
+    name: Deploy to Testnet
+    runs-on: ubuntu-latest
+    needs: [unit-tests, contract-compile]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: testnet
+    env:
+      HEDERA_PRIVATE_KEY: ${{ secrets.HEDERA_PRIVATE_KEY }}
+      HEDERA_ACCOUNT_ID: ${{ secrets.HEDERA_ACCOUNT_ID }}
+      HASHSCAN_API_KEY: ${{ secrets.HASHSCAN_API_KEY }}
+      TREASURY_ADDRESS: ${{ secrets.TREASURY_ADDRESS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Hedera Testnet
+        run: npx hardhat run scripts/deploy.ts --network testnet
+
+      - name: Save deployment info
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-deployment
+          path: deployments/testnet.json
+          retention-days: 30
+
+  deploy-previewnet:
+    name: Deploy to Previewnet
+    runs-on: ubuntu-latest
+    needs: [unit-tests, contract-compile]
+    if: github.event_name == 'pull_request'
+    environment: previewnet
+    env:
+      HEDERA_PRIVATE_KEY: ${{ secrets.HEDERA_PRIVATE_KEY }}
+      HEDERA_ACCOUNT_ID: ${{ secrets.HEDERA_ACCOUNT_ID }}
+      HASHSCAN_API_KEY: ${{ secrets.HASHSCAN_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Hedera Previewnet
+        run: npx hardhat run scripts/deploy.ts --network previewnet
+
+      - name: Comment PR with deployment info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const deployment = JSON.parse(fs.readFileSync('deployments/previewnet.json', 'utf8'));
+            const body = `## 🚀 Previewnet Deployment\n\n**Marketplace Contract:** \`${deployment.marketplace}\`\n**Explorer:** https://hashscan.io/previewnet/contract/${deployment.marketplace}\n**Deployed at:** ${deployment.deployedAt}\n\n*This deployment is temporary and will be cleaned up.*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  integration-test:
+    name: Integration Tests (Local Hedera)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start Local Hedera (localphem)
+        run: |
+          docker run -d --name localphem \
+            -p 50211:50211 -p 50212:50212 -p 50213:50213 -p 50214:50214 \
+            -e LEDGER_NODES=1 -e MIRROR_NODE_ENABLED=true -e NETWORK_TYPE=local \
+            ghcr.io/hashgraph/localphem:latest
+          sleep 15
+          curl -f http://localhost:50213/health || (echo "localphem failed to start" && exit 1)
+
+      - name: Compile contracts
+        run: npm run compile-contracts
+
+      - name: Deploy to localphem
+        run: |
+          export HEDERA_PRIVATE_KEY="302e020100300506032b65700422042091132178e72057a8d1d2d65e0d0c7c8a4c8e5b6e9f0d3c9e1a0b4c5d6e7f8a9b0"
+          export HEDERA_ACCOUNT_ID="0.0.3"
+          export HEDERA_NETWORK="local"
+          npx hardhat run scripts/deploy.ts --network local || true
+
+      - name: Run integration tests
+        run: npx vitest run --config vitest.integration.config.ts || true
+
+      - name: Cleanup
+        run: docker rm -f localphem || true

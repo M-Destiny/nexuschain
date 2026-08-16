@@ -1,5 +1,6 @@
 /** @type import('hardhat/config').HardhatUserConfig */
 require('@nomicfoundation/hardhat-toolbox');
+require('@typechain/hardhat');
 require('dotenv/config');
 
 const config = {
@@ -16,6 +17,12 @@ const config = {
   networks: {
     hardhat: {
       chainId: 1337,
+    },
+    local: {
+      url: 'http://localhost:50211',
+      accounts: ['0x91132178e72057a8d1d2d65e0d0c7c8a4c8e5b6e9f0d3c9e1a0b4c5d6e7f8a9b0'],
+      chainId: 296,
+      gasPrice: 'auto',
     },
     testnet: {
       url: 'https://testnet.hashio.io/api',
@@ -67,6 +74,13 @@ const config = {
   },
   sourcify: {
     enabled: true,
+  },
+  typechain: {
+    outDir: 'typechain-types',
+    target: 'ethers-v6',
+    alwaysGenerateOverloads: false,
+    externalArtifacts: ['artifacts/**/*.json'],
+    dontOverrideCompile: true,
   },
 };
 

@@ -14,7 +14,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "compile-contracts": "hardhat compile"
+    "compile-contracts": "hardhat compile",
+    "typechain": "hardhat typechain",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network testnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network mainnet",
+    "deploy:local": "hardhat run scripts/deploy.ts --network local"
   },
   "keywords": [
     "hedera",
