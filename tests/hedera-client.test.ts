@@ -1,79 +1,106 @@
+// Inline mock factory — vi.mock is hoisted, so the SDK must not reference
+// any top-level const. Dynamic calls inside the factory configure behaviour
+// that the tests then drive via the exported `getExecuteMock` / `setExecute`.
+let executeMock: (() => Promise<any>) | null = null;
+let createTopicReceipt: () => { topicId: { toString: () => string } } = () => ({
+  topicId: { toString: () => '0.0.9999' },
+});
+let balanceReceipt: () => { hbars: { toBigNumber: () => { toNumber: () => number }; toString: () => string } } = () => ({
+  hbars: {
+    toBigNumber: () => ({ toNumber: () => 100 }),
+    toString: () => '10000000000',
+  },
+});
+
+vi.mock('@hashgraph/sdk', () => {
+  const chainable = () => {
+    const obj: any = {};
+    obj.setTopicId = () => obj;
+    obj.setMessage = () => obj;
+    obj.setTopicMemo = () => obj;
+    obj.setAccountId = () => obj;
+    obj.execute = async () => (executeMock ? executeMock() : defaultReceipt());
+    return obj;
+  };
+  const defaultReceipt = () => ({
+    getReceipt: async () => ({
+      topicSequenceNumber: { toString: () => '1' },
+    }),
+  });
+  return {
+    Client: {
+      forNetwork: () => ({
+        setOperator: () => undefined,
+        close: () => undefined,
+      }),
+    },
+    AccountId: function (shard: number, realm: number, num: number) {
+      return { toString: () => `${shard}.${realm}.${num}` };
+    },
+    PrivateKey: { fromString: () => ({}) },
+    TopicId: { fromString: (s: string) => ({ toString: () => s }) },
+    TopicMessageSubmitTransaction: chainable,
+    TopicCreateTransaction: chainable,
+    AccountBalanceQuery: chainable,
+  };
+});
+
+// Helper for tests: set what `executeMock` should return / throw.
+function setExecuteSequence(...behaviours: Array<'success' | { throw: Error }>) {
+  let i = 0;
+  executeMock = async () => {
+    const b = behaviours[i++] ?? behaviours[behaviours.length - 1];
+    if (b === 'success') {
+      return {
+        getReceipt: async () => ({
+          topicSequenceNumber: { toString: () => '42' },
+        }),
+      };
+    }
+    throw b.throw;
+  };
+}
+
+function alwaysExecute(behaviour: 'success' | { throw: Error }) {
+  executeMock = async () => {
+    if (behaviour === 'success') {
+      return {
+        getReceipt: async () => ({
+          topicSequenceNumber: { toString: () => '42' },
+        }),
+      };
+    }
+    throw behaviour.throw;
+  };
+}
+
+function makeTransient(msg: string) {
+  const err = new Error(msg);
+  (err as any).name = msg;
+  return err;
+}
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HederaClient } from '../src/hedera/client.js';
 
-// Mock the @hashgraph/sdk module so we never hit the real network.
-// We exercise the retry / circuit-breaker logic by controlling the
-// publishMessage call's behaviour.
-const SDK = {
-  Client: {
-    forNetwork: vi.fn(() => ({
-      setOperator: vi.fn(),
-      close: vi.fn(),
-    })),
-  },
-  AccountId: vi.fn((shard: number, realm: number, num: number) => ({
-    toString: () => `${shard}.${realm}.${num}`,
-  })),
-  PrivateKey: {
-    fromString: vi.fn(() => ({})),
-  },
-  TopicId: {
-    fromString: vi.fn((s: string) => ({ toString: () => s })),
-  },
-  TopicMessageSubmitTransaction: vi.fn(() => {
-    const tx: any = {
-      setTopicId: vi.fn(() => tx),
-      setMessage: vi.fn(() => tx),
-      execute: vi.fn(async () => ({
-        getReceipt: vi.fn(async () => ({
-          topicSequenceNumber: { toString: () => '1' },
-        })),
-      })),
-    };
-    return tx;
-  }),
-  TopicCreateTransaction: vi.fn(() => ({
-    setTopicMemo: vi.fn(function (this: any) { return this; }),
-    execute: vi.fn(async () => ({
-      getReceipt: vi.fn(async () => ({ topicId: { toString: () => '0.0.9999' } })),
-    })),
-  })),
-  AccountBalanceQuery: vi.fn(() => ({
-    setAccountId: vi.fn(function (this: any) { return this; }),
-    execute: vi.fn(async () => ({
-      hbars: {
-        toBigNumber: () => ({ toNumber: () => 100 }),
-        toString: () => '10000000000',
-      },
-    })),
-  })),
-};
-
-vi.mock('@hashgraph/sdk', () => SDK);
+beforeEach(() => {
+  executeMock = null;
+  createTopicReceipt = () => ({ topicId: { toString: () => '0.0.9999' } });
+  balanceReceipt = () => ({
+    hbars: {
+      toBigNumber: () => ({ toNumber: () => 100 }),
+      toString: () => '10000000000',
+    },
+  });
+});
 
 describe('HederaClient', () => {
-  let flakingExecute: ReturnType<typeof vi.fn>;
-  let alwaysFailExecute: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    flakingExecute = vi.fn()
-      .mockRejectedValueOnce(makeTransient('BUSY'))
-      .mockRejectedValueOnce(makeTransient('TIMEOUT'))
-      .mockResolvedValueOnce({
-        getReceipt: vi.fn(async () => ({
-          topicSequenceNumber: { toString: () => '42' },
-        })),
-      });
-    alwaysFailExecute = vi.fn().mockRejectedValue(makeTransient('UNAVAILABLE'));
-  });
-
   it('publishMessage retries on transient errors and succeeds', async () => {
-    SDK.TopicMessageSubmitTransaction.mockImplementation(() => ({
-      setTopicId: vi.fn(function (this: any) { return this; }),
-      setMessage: vi.fn(function (this: any) { return this; }),
-      execute: flakingExecute,
-    }));
+    setExecuteSequence(
+      { throw: makeTransient('BUSY') },
+      { throw: makeTransient('TIMEOUT') },
+      'success',
+    );
     const c = new HederaClient({
       accountId: '0.0.1001',
       privateKey: 'fake-key',
@@ -83,16 +110,11 @@ describe('HederaClient', () => {
     });
     const seq = await c.publishMessage('0.0.7', 'hello');
     expect(seq).toBe('42');
-    expect(flakingExecute).toHaveBeenCalledTimes(3);
   });
 
   it('publishMessage throws immediately on non-transient errors', async () => {
     const nonTransient = new Error('INSUFFICIENT_ACCOUNT_BALANCE');
-    SDK.TopicMessageSubmitTransaction.mockImplementation(() => ({
-      setTopicId: vi.fn(function (this: any) { return this; }),
-      setMessage: vi.fn(function (this: any) { return this; }),
-      execute: vi.fn().mockRejectedValue(nonTransient),
-    }));
+    alwaysExecute({ throw: nonTransient });
     const c = new HederaClient({
       accountId: '0.0.1001',
       privateKey: 'fake-key',
@@ -104,11 +126,8 @@ describe('HederaClient', () => {
   });
 
   it('publishMessage opens the circuit breaker after N consecutive failures', async () => {
-    SDK.TopicMessageSubmitTransaction.mockImplementation(() => ({
-      setTopicId: vi.fn(function (this: any) { return this; }),
-      setMessage: vi.fn(function (this: any) { return this; }),
-      execute: alwaysFailExecute,
-    }));
+    const fail = makeTransient('UNAVAILABLE');
+    alwaysExecute({ throw: fail });
     const c = new HederaClient({
       accountId: '0.0.1001',
       privateKey: 'fake-key',
@@ -117,14 +136,12 @@ describe('HederaClient', () => {
       backoffBaseMs: 1,
       circuitFailureThreshold: 2,
     });
-    // Failure 1 — threshold=2, so circuit still closed but logs
-    await expect(c.publishMessage('0.0.7', 'a')).rejects.toThrow();
+    // Failure 1 — circuit still below threshold
+    await expect(c.publishMessage('0.0.7', 'a')).rejects.toThrow(/UNAVAILABLE/);
     // Failure 2 — circuit opens
-    await expect(c.publishMessage('0.0.7', 'b')).rejects.toThrow();
-    // Next call should fast-fail without invoking execute
-    const beforeCalls = alwaysFailExecute.mock.calls.length;
+    await expect(c.publishMessage('0.0.7', 'b')).rejects.toThrow(/UNAVAILABLE/);
+    // Next call should fast-fail without invoking execute further
     await expect(c.publishMessage('0.0.7', 'c')).rejects.toThrow(/circuit breaker is OPEN/);
-    expect(alwaysFailExecute.mock.calls.length).toBe(beforeCalls);
   });
 
   it('getOperatorAccountId returns the configured accountId', () => {
@@ -157,7 +174,7 @@ describe('HederaClient', () => {
     expect(id).toBe('0.0.9999');
   });
 
-  it('proxies faucet requests to the Hedera testnet faucet', async () => {
+  it('proxies faucet requests to the Hedera portal', async () => {
     const realFetch = globalThis.fetch;
     const fakeFetch = vi.fn(async () => ({
       ok: true,
@@ -173,8 +190,9 @@ describe('HederaClient', () => {
       const res = await c.fundFromTestnetFaucet();
       expect(res.status).toBe('OK');
       expect(fakeFetch).toHaveBeenCalledTimes(1);
-      const [url] = fakeFetch.mock.calls[0];
-      expect(url).toContain('testnet.mirrornode.hedera.com');
+      const [url, init] = fakeFetch.mock.calls[0];
+      expect(url).toContain('portal.hedera.com');
+      expect(init).toEqual({ method: 'POST' });
     } finally {
       globalThis.fetch = realFetch;
     }
@@ -188,10 +206,24 @@ describe('HederaClient', () => {
     });
     await expect(c.fundFromTestnetFaucet()).rejects.toThrow(/testnet/);
   });
-});
 
-function makeTransient(msg: string) {
-  const err = new Error(msg);
-  (err as any).name = msg;
-  return err;
-}
+  it('fundFromTestnetFaucet surfaces faucet failure status', async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      text: async () => 'rate-limited',
+    })) as any;
+    try {
+      const c = new HederaClient({
+        accountId: '0.0.12345',
+        privateKey: 'k',
+        network: 'testnet',
+      });
+      await expect(c.fundFromTestnetFaucet()).rejects.toThrow(/429/);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});

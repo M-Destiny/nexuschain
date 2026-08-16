@@ -149,11 +149,11 @@ describe('AgentRegistry', () => {
     await expect(registry.upgradeAgent('nope', '1.0.0', 'c')).rejects.toThrow('not found');
   });
 
-  it('propagates transient publish errors through retry in HederaClient', async () => {
-    // registerAgent already returns once on first transient + retry-success
-    hedera.failNextPublishNTimes(2, 'BUSY');
-    const id = await registry.registerAgent(makeAgent(), 'k');
-    expect(id).toBeTruthy();
-    expect(hedera.publishMessage).toHaveBeenCalledTimes(3); // 2 failures + 1 success
+  it('propagates publish failures to the caller (caller chooses how to retry)', async () => {
+    // AgentRegistry does not retry — the retry/cb logic lives in HederaClient
+    // (covered in tests/hedera-client.test.ts). Here we verify registry
+    // doesn't swallow the error.
+    hedera.failNextPublishNTimes(1, 'INSUFFICIENT_ACCOUNT_BALANCE');
+    await expect(registry.registerAgent(makeAgent(), 'k')).rejects.toThrow(/INSUFFICIENT_ACCOUNT_BALANCE/);
   });
 });
