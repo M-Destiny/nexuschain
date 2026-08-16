@@ -20,7 +20,7 @@ const config = {
     },
     local: {
       url: 'http://localhost:50211',
-      accounts: ['0x91132178e72057a8d1d2d65e0d0c7c8a4c8e5b6e9f0d3c9e1a0b4c5d6e7f8a9b0'],
+      accounts: ['0x91132178e72057a8d1d2d65e0d0c7c8a4c8e5b6e9f0d3c9e1a0b4c5d6e7f8a9b0c'],
       chainId: 296,
       gasPrice: 'auto',
     },

@@ -11,6 +11,14 @@ pragma solidity ^0.8.24;
 contract NexusChainMarketplace {
 
     // --- Structs ---
+    struct SubscriptionTier {
+        string name;
+        uint256 pricePerMonth;     // in tinybars
+        uint256 callsPerMonth;
+        string[] features;
+        bool isActive;
+    }
+
     struct Agent {
         string id;
         string name;
@@ -22,6 +30,7 @@ contract NexusChainMarketplace {
         bool isActive;
         string ipfsCid;
         string[] capabilities;
+        SubscriptionTier[] subscriptionTiers;
     }
 
     struct Listing {
@@ -91,7 +100,8 @@ contract NexusChainMarketplace {
         string memory description,
         uint256 pricePerCall,
         string memory ipfsCid,
-        string[] memory capabilities
+        string[] memory capabilities,
+        SubscriptionTier[] memory subscriptionTiers
     ) external {
         require(bytes(agents[id].id).length == 0, "Agent ID already exists");
         require(pricePerCall > 0, "Price must be positive");
@@ -107,7 +117,8 @@ contract NexusChainMarketplace {
             ratingCount: 0,
             isActive: true,
             ipfsCid: ipfsCid,
-            capabilities: capabilities
+            capabilities: capabilities,
+            subscriptionTiers: subscriptionTiers
         });
 
         emit AgentRegistered(id, name, msg.sender, pricePerCall);
@@ -124,8 +135,21 @@ contract NexusChainMarketplace {
         }
     }
 
+    /** @dev Add or update subscription tiers for an agent. Only the owner can call. */
+    function updateSubscriptionTiers(
+        string memory id,
+        SubscriptionTier[] memory tiers
+    ) external {
+        require(agents[id].owner == msg.sender, "Not the owner");
+        agents[id].subscriptionTiers = tiers;
+    }
+
     function getAgent(string memory id) external view returns (Agent memory) {
         return agents[id];
+    }
+
+    function getSubscriptionTiers(string memory id) external view returns (SubscriptionTier[] memory) {
+        return agents[id].subscriptionTiers;
     }
 
     // --- Marketplace ---
