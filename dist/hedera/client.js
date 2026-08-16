@@ -36,8 +36,7 @@ export class HederaClient {
     backoffBaseMs;
     circuitFailureThreshold;
     circuit = { failures: 0, openUntil: 0 };
-    pinataJwt;
-    pinataGateway;
+    web3StorageToken;
     constructor(config) {
         this.accountId = config.accountId;
         this.privateKey = config.privateKey;
@@ -45,8 +44,7 @@ export class HederaClient {
         this.maxRetries = config.maxRetries ?? 4;
         this.backoffBaseMs = config.backoffBaseMs ?? 250;
         this.circuitFailureThreshold = config.circuitFailureThreshold ?? 5;
-        this.pinataJwt = config.pinataJwt;
-        this.pinataGateway = config.pinataGateway ?? 'gateway.pinata.cloud';
+        this.web3StorageToken = config.web3StorageToken;
         this.client = Client.forNetwork(NETWORK_MAP[config.network]);
         this.client.setOperator(new AccountId(this.accountId), PrivateKey.fromString(this.privateKey));
     }
@@ -137,6 +135,35 @@ export class HederaClient {
         return {
             status: data.status ?? 'UNKNOWN',
             accountId: this.accountId,
+        };
+    }
+    /**
+     * Pin JSON data to IPFS via Web3.Storage.
+     * Requires `web3StorageToken` to be configured in the client options.
+     * Returns the CID of the pinned content.
+     */
+    async pinToIPFS(data) {
+        if (!this.web3StorageToken) {
+            throw new Error('Web3.Storage token not configured. Set web3StorageToken in HederaClientOptions.');
+        }
+        const payload = JSON.stringify(data);
+        const res = await fetch('https://api.web3.storage/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.web3StorageToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: payload,
+        });
+        if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            throw new Error(`Web3.Storage upload failed: ${res.status} ${res.statusText} ${body}`);
+        }
+        const json = await res.json();
+        return {
+            cid: json.cid,
+            size: json.size,
+            timestamp: new Date().toISOString(),
         };
     }
     // ---------------------------------------------------------------------------

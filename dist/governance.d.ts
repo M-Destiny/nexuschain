@@ -1,15 +1,24 @@
 import { HederaClient } from './hedera/client.js';
 import type { GovernanceProposal } from './types.js';
+export interface GovernanceOptions {
+    /** Hours after a proposal passes before it can be executed. Default 48. */
+    timeLockHours?: number;
+    /** Minimum quorum in tinybars required for proposal validity. Default 10 HBAR (10_000_000 tinybars). */
+    minQuorum?: string;
+    /** Address of a veto holder (e.g., multisig). If set, this address can veto passed proposals. */
+    vetoAddress?: string;
+}
 export declare class Governance {
     private hedera;
     private proposalTopicId;
     private timeLockHours;
+    private minQuorum;
+    private vetoAddress?;
     private proposals;
-    constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string, options?: {
-        timeLockHours?: number;
-    });
+    constructor(hedera: HederaClient, _tokenId: string, proposalTopicId: string, options?: GovernanceOptions);
     createProposal(title: string, description: string, durationDays?: number): Promise<string>;
     vote(proposalId: string, support: boolean, amount: string): Promise<void>;
+    veto(proposalId: string): Promise<void>;
     getProposal(proposalId: string): Promise<GovernanceProposal | null>;
     /**
      * Tally votes and mark the proposal 'passed' or 'rejected'.
@@ -28,5 +37,6 @@ export declare class Governance {
      */
     finalizeProposal(proposalId: string): Promise<void>;
     getActiveProposals(): GovernanceProposal[];
+    getVetoAddress(): string | undefined;
 }
 //# sourceMappingURL=governance.d.ts.map

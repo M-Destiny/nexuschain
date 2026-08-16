@@ -9,10 +9,14 @@ export interface HederaClientOptions {
     backoffBaseMs?: number;
     /** Circuit-breaker failure threshold before fast-fail for 30s. Default 5. */
     circuitFailureThreshold?: number;
-    /** Pinata JWT for IPFS pinning (optional). */
-    pinataJwt?: string;
-    /** Pinata Gateway domain for content retrieval (optional). Default: 'gateway.pinata.cloud'. */
-    pinataGateway?: string;
+    /** Web3.Storage API token for IPFS pinning (optional). */
+    web3StorageToken?: string;
+}
+/** Result of an IPFS pinning operation. */
+export interface PinResult {
+    cid: string;
+    size: number;
+    timestamp: string;
 }
 /**
  * Thin wrapper around the Hedera Consensus/Token Service SDK that adds:
@@ -34,8 +38,7 @@ export declare class HederaClient {
     private backoffBaseMs;
     private circuitFailureThreshold;
     private circuit;
-    private pinataJwt?;
-    private pinataGateway;
+    private web3StorageToken?;
     constructor(config: HederaClientOptions);
     createTopic(name: string): Promise<string>;
     /**
@@ -64,6 +67,12 @@ export declare class HederaClient {
         status: string;
         accountId: string;
     }>;
+    /**
+     * Pin JSON data to IPFS via Web3.Storage.
+     * Requires `web3StorageToken` to be configured in the client options.
+     * Returns the CID of the pinned content.
+     */
+    pinToIPFS(data: unknown): Promise<PinResult>;
     private executeWithBreaker;
     private assertCircuitClosed;
     private recordSuccess;

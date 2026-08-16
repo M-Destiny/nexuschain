@@ -48,12 +48,14 @@ export interface GovernanceProposal {
     description: string;
     forVotes: string;
     againstVotes: string;
-    status: 'active' | 'passed' | 'rejected' | 'executed';
+    vetoVotes: string;
+    status: 'active' | 'passed' | 'rejected' | 'executed' | 'vetoed';
     createdBy: string;
     deadline: string;
     quorum: string;
-    /**
-     * After execution, action is queued and becomes executable only after
+    /** Minimum quorum required for the proposal to be valid (in tinybars). */
+    minQuorum: string;
+    /** After execution, action is queued and becomes executable only after
      * this timestamp. Prevents rushed governance changes being applied the
      * instant a vote closes — gives the community a window to rally / exit.
      */

@@ -3,6 +3,8 @@ export class Governance {
     hedera;
     proposalTopicId;
     timeLockHours;
+    minQuorum;
+    vetoAddress;
     proposals = new Map();
     constructor(hedera, _tokenId, proposalTopicId, options = {}) {
         this.hedera = hedera;
@@ -11,6 +13,10 @@ export class Governance {
         // many hours so the community has time to react to malicious proposals
         // or governance attacks. Configurable so test environments can shorten it.
         this.timeLockHours = options.timeLockHours ?? 48;
+        // Minimum quorum in tinybars for a proposal to be valid
+        this.minQuorum = options.minQuorum ?? '10000000';
+        // Veto address can veto passed proposals
+        this.vetoAddress = options.vetoAddress;
         // _tokenId reserved for future HTS governance-token integration (votes-weighted-by-HTS-balance)
         void _tokenId;
     }
@@ -23,10 +29,12 @@ export class Governance {
             description,
             forVotes: '0',
             againstVotes: '0',
+            vetoVotes: '0',
             status: 'active',
             createdBy: this.hedera.getOperatorAccountId(),
             deadline,
-            quorum: '10000000', // 10 HBAR in tinybars
+            quorum: this.minQuorum,
+            minQuorum: this.minQuorum,
         };
         this.proposals.set(id, proposal);
         await this.hedera.publishMessage(this.proposalTopicId, JSON.stringify({
@@ -35,6 +43,8 @@ export class Governance {
             title,
             description,
             deadline,
+            minQuorum: this.minQuorum,
+            vetoAddress: this.vetoAddress,
             timestamp: new Date().toISOString(),
         }));
         return id;
@@ -64,6 +74,33 @@ export class Governance {
             timestamp: new Date().toISOString(),
         }));
     }
+    async veto(proposalId) {
+        const proposal = this.proposals.get(proposalId);
+        if (!proposal)
+            throw new Error(`Proposal ${proposalId} not found`);
+        if (!this.vetoAddress)
+            throw new Error('Veto not configured for this governance instance');
+        if (this.hedera.getOperatorAccountId() !== this.vetoAddress) {
+            throw new Error(`Only the veto address (${this.vetoAddress}) can veto proposals`);
+        }
+        if (proposal.status !== 'passed') {
+            throw new Error(`Can only veto passed proposals (current: ${proposal.status})`);
+        }
+        if (!proposal.executableAt) {
+            throw new Error(`Proposal ${proposalId} has no executableAt timestamp`);
+        }
+        if (new Date(proposal.executableAt) <= new Date()) {
+            throw new Error(`Cannot veto: time-lock has elapsed, proposal is already executable`);
+        }
+        proposal.status = 'vetoed';
+        proposal.vetoVotes = String(BigInt(proposal.vetoVotes) + BigInt('1')); // symbolic veto count
+        await this.hedera.publishMessage(this.proposalTopicId, JSON.stringify({
+            type: 'PROPOSAL_VETOED',
+            proposalId,
+            vetoedBy: this.vetoAddress,
+            timestamp: new Date().toISOString(),
+        }));
+    }
     async getProposal(proposalId) {
         return this.proposals.get(proposalId) ?? null;
     }
@@ -82,11 +119,13 @@ export class Governance {
             throw new Error(`Proposal ${proposalId} not found`);
         const forVotes = BigInt(proposal.forVotes);
         const againstVotes = BigInt(proposal.againstVotes);
+        const totalVotes = forVotes + againstVotes;
         const quorum = BigInt(proposal.quorum);
-        if (forVotes + againstVotes < quorum) {
+        const minQuorum = BigInt(proposal.minQuorum);
+        if (totalVotes < minQuorum) {
             proposal.status = 'rejected';
         }
-        else if (forVotes > againstVotes) {
+        else if (forVotes > againstVotes && totalVotes >= quorum) {
             proposal.status = 'passed';
             proposal.executableAt = new Date(Date.now() + this.timeLockHours * 60 * 60 * 1000).toISOString();
         }
@@ -128,6 +167,9 @@ export class Governance {
     }
     getActiveProposals() {
         return Array.from(this.proposals.values()).filter(p => p.status === 'active');
+    }
+    getVetoAddress() {
+        return this.vetoAddress;
     }
 }
 //# sourceMappingURL=governance.js.map
