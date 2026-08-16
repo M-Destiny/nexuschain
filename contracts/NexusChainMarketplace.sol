@@ -47,7 +47,7 @@ contract NexusChainMarketplace {
     mapping(string => Listing) public listings;
     mapping(string => Proposal) public proposals;
     mapping(address => mapping(string => uint256)) public voterStake;
-    mapping(address => uint256) public agentRevenue;
+    mapping(string => uint256) public agentRevenue;
 
     uint256 public constant QUORUM = 10_000_000_000; // 10 HBAR in tinybars
     uint256 public constant VOTE_DURATION = 7 days;
