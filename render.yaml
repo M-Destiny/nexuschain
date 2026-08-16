@@ -1,15 +1,13 @@
-# Render.com Blueprint — free tier
-# Deploy: render.com/blueprints → Connect this repo
-
 services:
   - type: web
     name: nexuschain
-    runtime: node
+    env: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: node dist/cli.js --version
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/cli.js
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -19,3 +17,23 @@ services:
         sync: false
       - key: HEDERA_PRIVATE_KEY
         sync: false
+      - key: MARKETPLACE_CONTRACT
+        sync: false
+      - key: GOVERNANCE_TOKEN
+        sync: false
+      - key: MANIFEST_TOPIC
+        sync: false
+      - key: GOVERNANCE_TOPIC
+        sync: false
+      - key: USAGE_TOPIC
+        sync: false
+      - key: HASHSCAN_API_KEY
+        sync: false
+      - key: WEB3_STORAGE_TOKEN
+        sync: false
+    disk:
+      name: nexuschain-data
+      mountPath: /data
+      sizeGB: 1
+
+databases: []

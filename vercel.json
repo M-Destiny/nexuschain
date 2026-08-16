@@ -1,18 +1,47 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "name": "nexuschain",
-  "builds": [{ "src": "src/**/*", "use": "@vercel/node" }],
-  "routes": [{ "src": "/(.*)", "dest": "src/cli.js" }],
-  "installCommand": "npm install",
+  "framework": "nextjs",
   "buildCommand": "npm run build",
-  "regions": ["iad1", "sfo1", "fra1"],
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
   "functions": {
-    "src/dist/cli.js": {
-      "memory": 512,
-      "maxDuration": 30,
-      "launcherType": "CLI"
+    "src/api/**/*.ts": {
+      "maxDuration": 30
     }
   },
   "env": {
+    "HEDERA_NETWORK": "testnet",
     "NODE_ENV": "production"
-  }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/metrics",
+      "destination": "/api/metrics"
+    }
+  ]
 }
