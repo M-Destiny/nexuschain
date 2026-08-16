@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'nexuschain'
+    static_configs:
+      - targets: ['host.docker.internal:3000']  # Metrics endpoint from the app
+    metrics_path: '/metrics'
+
+  - job_name: 'localphem'
+    static_configs:
+      - targets: ['localphem:50213']
+    metrics_path: '/metrics'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

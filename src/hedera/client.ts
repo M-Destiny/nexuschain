@@ -8,19 +8,6 @@ import {
   AccountBalanceQuery,
 } from '@hashgraph/sdk';
 
-interface PinataPinResponse {
-  IpfsHash: string;
-  PinSize: number;
-  Timestamp: string;
-  isDuplicate: boolean;
-}
-
-interface PinataPinFileResponse {
-  IpfsHash: string;
-  PinSize: number;
-  Timestamp: string;
-}
-
 export interface HederaClientOptions {
   accountId: string;
   privateKey: string;
@@ -31,15 +18,20 @@ export interface HederaClientOptions {
   backoffBaseMs?: number;
   /** Circuit-breaker failure threshold before fast-fail for 30s. Default 5. */
   circuitFailureThreshold?: number;
-  /** Pinata JWT for IPFS pinning (optional). */
-  pinataJwt?: string;
-  /** Pinata Gateway domain for content retrieval (optional). Default: 'gateway.pinata.cloud'. */
-  pinataGateway?: string;
+  /** Web3.Storage API token for IPFS pinning (optional). */
+  web3StorageToken?: string;
 }
 
 interface CircuitState {
   failures: number;
   openUntil: number; // epoch ms; circuit is OPEN until this time
+}
+
+/** Result of an IPFS pinning operation. */
+export interface PinResult {
+  cid: string;
+  size: number;
+  timestamp: string;
 }
 
 const NETWORK_MAP = {
@@ -81,8 +73,7 @@ export class HederaClient {
   private backoffBaseMs: number;
   private circuitFailureThreshold: number;
   private circuit: CircuitState = { failures: 0, openUntil: 0 };
-  private pinataJwt?: string;
-  private pinataGateway: string;
+  private web3StorageToken?: string;
 
   constructor(config: HederaClientOptions) {
     this.accountId = config.accountId;
@@ -91,8 +82,7 @@ export class HederaClient {
     this.maxRetries = config.maxRetries ?? 4;
     this.backoffBaseMs = config.backoffBaseMs ?? 250;
     this.circuitFailureThreshold = config.circuitFailureThreshold ?? 5;
-    this.pinataJwt = config.pinataJwt;
-    this.pinataGateway = config.pinataGateway ?? 'gateway.pinata.cloud';
+    this.web3StorageToken = config.web3StorageToken;
 
     this.client = Client.forNetwork(NETWORK_MAP[config.network]);
     this.client.setOperator(
@@ -194,6 +184,36 @@ export class HederaClient {
     return {
       status: (data.status as string) ?? 'UNKNOWN',
       accountId: this.accountId,
+    };
+  }
+
+  /**
+   * Pin JSON data to IPFS via Web3.Storage.
+   * Requires `web3StorageToken` to be configured in the client options.
+   * Returns the CID of the pinned content.
+   */
+  async pinToIPFS(data: unknown): Promise<PinResult> {
+    if (!this.web3StorageToken) {
+      throw new Error('Web3.Storage token not configured. Set web3StorageToken in HederaClientOptions.');
+    }
+    const payload = JSON.stringify(data);
+    const res = await fetch('https://api.web3.storage/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.web3StorageToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: payload,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Web3.Storage upload failed: ${res.status} ${res.statusText} ${body}`);
+    }
+    const json = await res.json() as { cid: string; size: number };
+    return {
+      cid: json.cid,
+      size: json.size,
+      timestamp: new Date().toISOString(),
     };
   }
 

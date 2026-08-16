@@ -2,17 +2,28 @@ import { HederaClient } from './hedera/client.js';
 import type { GovernanceProposal } from './types.js';
 import { v4 as uuid } from 'uuid';
 
+export interface GovernanceOptions {
+  /** Hours after a proposal passes before it can be executed. Default 48. */
+  timeLockHours?: number;
+  /** Minimum quorum in tinybars required for proposal validity. Default 10 HBAR (10_000_000 tinybars). */
+  minQuorum?: string;
+  /** Address of a veto holder (e.g., multisig). If set, this address can veto passed proposals. */
+  vetoAddress?: string;
+}
+
 export class Governance {
   private hedera: HederaClient;
   private proposalTopicId: string;
   private timeLockHours: number;
+  private minQuorum: string;
+  private vetoAddress?: string;
   private proposals = new Map<string, GovernanceProposal>();
 
   constructor(
     hedera: HederaClient,
     _tokenId: string,
     proposalTopicId: string,
-    options: { timeLockHours?: number } = {},
+    options: GovernanceOptions = {},
   ) {
     this.hedera = hedera;
     this.proposalTopicId = proposalTopicId;
@@ -20,6 +31,10 @@ export class Governance {
     // many hours so the community has time to react to malicious proposals
     // or governance attacks. Configurable so test environments can shorten it.
     this.timeLockHours = options.timeLockHours ?? 48;
+    // Minimum quorum in tinybars for a proposal to be valid
+    this.minQuorum = options.minQuorum ?? '10000000';
+    // Veto address can veto passed proposals
+    this.vetoAddress = options.vetoAddress;
     // _tokenId reserved for future HTS governance-token integration (votes-weighted-by-HTS-balance)
     void _tokenId;
   }
@@ -33,10 +48,12 @@ export class Governance {
       description,
       forVotes: '0',
       againstVotes: '0',
+      vetoVotes: '0',
       status: 'active',
       createdBy: this.hedera.getOperatorAccountId(),
       deadline,
-      quorum: '10000000', // 10 HBAR in tinybars
+      quorum: this.minQuorum,
+      minQuorum: this.minQuorum,
     };
     this.proposals.set(id, proposal);
 
@@ -46,6 +63,8 @@ export class Governance {
       title,
       description,
       deadline,
+      minQuorum: this.minQuorum,
+      vetoAddress: this.vetoAddress,
       timestamp: new Date().toISOString(),
     }));
 
@@ -77,6 +96,34 @@ export class Governance {
     }));
   }
 
+  async veto(proposalId: string): Promise<void> {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
+    if (!this.vetoAddress) throw new Error('Veto not configured for this governance instance');
+    if (this.hedera.getOperatorAccountId() !== this.vetoAddress) {
+      throw new Error(`Only the veto address (${this.vetoAddress}) can veto proposals`);
+    }
+    if (proposal.status !== 'passed') {
+      throw new Error(`Can only veto passed proposals (current: ${proposal.status})`);
+    }
+    if (!proposal.executableAt) {
+      throw new Error(`Proposal ${proposalId} has no executableAt timestamp`);
+    }
+    if (new Date(proposal.executableAt) <= new Date()) {
+      throw new Error(`Cannot veto: time-lock has elapsed, proposal is already executable`);
+    }
+
+    proposal.status = 'vetoed';
+    proposal.vetoVotes = String(BigInt(proposal.vetoVotes) + BigInt('1')); // symbolic veto count
+
+    await this.hedera.publishMessage(this.proposalTopicId, JSON.stringify({
+      type: 'PROPOSAL_VETOED',
+      proposalId,
+      vetoedBy: this.vetoAddress,
+      timestamp: new Date().toISOString(),
+    }));
+  }
+
   async getProposal(proposalId: string): Promise<GovernanceProposal | null> {
     return this.proposals.get(proposalId) ?? null;
   }
@@ -96,11 +143,13 @@ export class Governance {
 
     const forVotes = BigInt(proposal.forVotes);
     const againstVotes = BigInt(proposal.againstVotes);
+    const totalVotes = forVotes + againstVotes;
     const quorum = BigInt(proposal.quorum);
+    const minQuorum = BigInt(proposal.minQuorum);
 
-    if (forVotes + againstVotes < quorum) {
+    if (totalVotes < minQuorum) {
       proposal.status = 'rejected';
-    } else if (forVotes > againstVotes) {
+    } else if (forVotes > againstVotes && totalVotes >= quorum) {
       proposal.status = 'passed';
       proposal.executableAt = new Date(
         Date.now() + this.timeLockHours * 60 * 60 * 1000,
@@ -147,5 +196,9 @@ export class Governance {
 
   getActiveProposals(): GovernanceProposal[] {
     return Array.from(this.proposals.values()).filter(p => p.status === 'active');
+  }
+
+  getVetoAddress(): string | undefined {
+    return this.vetoAddress;
   }
 }

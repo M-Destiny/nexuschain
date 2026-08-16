@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Local Hedera network (localphem) for development
+  localphem:
+    image: ghcr.io/hashgraph/localphem:latest
+    container_name: nexuschain-localphem
+    ports:
+      - "50211:50211"   # JSON-RPC
+      - "50212:50212"   # gRPC
+      - "50213:50213"   # REST
+      - "50214:50214"   # Mirror node REST
+    environment:
+      - LEDGER_NODES=1
+      - MIRROR_NODE_ENABLED=true
+      - NETWORK_TYPE=local
+    volumes:
+      - localphem-data:/var/lib/hedera
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:50213/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # IPFS node for local metadata pinning (Kubo)
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: nexuschain-ipfs
+    ports:
+      - "4001:4001"     # Swarm
+      - "5001:5001"     # API
+      - "8080:8080"     # Gateway
+    environment:
+      - IPFS_PROFILE=test
+    volumes:
+      - ipfs-data:/data/ipfs
+    healthcheck:
+      test: ["CMD", "ipfs", "version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Prometheus for metrics scraping
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nexuschain-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - localphem
+
+  # Grafana for dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nexuschain-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+
+volumes:
+  localphem-data:
+  ipfs-data:
+  prometheus-data:
+  grafana-data:
