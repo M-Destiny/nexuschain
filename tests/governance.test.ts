@@ -133,4 +133,43 @@ describe('Governance', () => {
     await gov.executeProposal(id);
     await expect(gov.finalizeProposal(id)).rejects.toThrow(/not in 'passed' state/);
   });
+
+  it('veto throws when vetoAddress not configured', async () => {
+    const id = await gov.createProposal('T', 'D', 7);
+    await gov.vote(id, true, '6000000');
+    await gov.vote(id, false, '4000001');
+    await gov.executeProposal(id);
+    await expect(gov.veto(id)).rejects.toThrow(/Veto not configured/);
+  });
+
+  it('veto throws when caller is not the veto address', async () => {
+    const customGov = new Governance(hedera as any, '0.0.11111', '0.0.33333', { vetoAddress: '0.0.9999' });
+    const id = await customGov.createProposal('T', 'D', 7);
+    await customGov.vote(id, true, '6000000');
+    await customGov.vote(id, false, '4000001');
+    await customGov.executeProposal(id);
+    await expect(customGov.veto(id)).rejects.toThrow(/Only the veto address/);
+  });
+
+  it('veto succeeds when veto address calls on passed proposal before time-lock', async () => {
+    const customGov = new Governance(hedera as any, '0.0.11111', '0.0.33333', { vetoAddress: '0.0.1001', timeLockHours: 48 });
+    const id = await customGov.createProposal('T', 'D', 7);
+    await customGov.vote(id, true, '6000000');
+    await customGov.vote(id, false, '4000001');
+    await customGov.executeProposal(id);
+    await customGov.veto(id);
+    const p = await customGov.getProposal(id);
+    expect(p?.status).toBe('vetoed');
+    expect(p?.vetoVotes).toBe('1');
+  });
+
+  it('veto throws after time-lock has elapsed', async () => {
+    const customGov = new Governance(hedera as any, '0.0.11111', '0.0.33333', { vetoAddress: '0.0.1001', timeLockHours: 0 });
+    const id = await customGov.createProposal('T', 'D', 7);
+    await customGov.vote(id, true, '6000000');
+    await customGov.vote(id, false, '4000001');
+    await customGov.executeProposal(id);
+    await customGov.finalizeProposal(id); // time-lock 0 = immediately executable
+    await expect(customGov.veto(id)).rejects.toThrow(/time-lock has elapsed/);
+  });
 });

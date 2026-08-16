@@ -342,18 +342,23 @@ contract NexusChainMarketplace {
         }
         string[] memory parts = new string[](count);
         uint256 partIdx = 0;
-        string memory current = "";
+        bytes memory currentBytes = new bytes(0);
         for (uint256 i = 0; i < bytes(s).length; i++) {
             bytes1 c = bytes(s)[i];
             if (c == bytes(delim)[0]) {
-                parts[partIdx] = current;
-                current = "";
+                parts[partIdx] = string(currentBytes);
+                currentBytes = new bytes(0);
                 partIdx++;
             } else {
-                current = string(abi.encodePacked(current, string(bytes1(c))));
+                bytes memory temp = new bytes(currentBytes.length + 1);
+                for (uint256 j = 0; j < currentBytes.length; j++) {
+                    temp[j] = currentBytes[j];
+                }
+                temp[currentBytes.length] = c;
+                currentBytes = temp;
             }
         }
-        parts[partIdx] = current;
+        parts[partIdx] = string(currentBytes);
         return parts;
     }
 
@@ -366,7 +371,7 @@ contract NexusChainMarketplace {
         for (uint256 i = 0; i < bytes(s).length; i++) {
             bytes1 c = bytes(s)[i];
             if (c >= '0' && c <= '9') {
-                result = result * 10 + uint256(uint8(c) - uint8('0'));
+                result = result * 10 + uint256(uint8(c) - 48); // '0' = 48 in ASCII
             } else {
                 return 0; // not a pure number
             }
