@@ -113,7 +113,7 @@ export class Marketplace {
       txId,
       timestamp: new Date().toISOString(),
     }));
-    mpPurchasesTotal.inc();
+    mpPurchasesTotal().inc();
     return txId;
   }
 
@@ -121,7 +121,7 @@ export class Marketplace {
     const listing = Array.from(this.listings.values()).find(l => l.agentId === agentId);
     if (listing) {
       listing.views++;
-      mpViewsTotal.inc();
+      mpViewsTotal().inc();
     }
     return listing ?? null;
   }
@@ -180,7 +180,7 @@ export class Marketplace {
       rating,
       timestamp: new Date().toISOString(),
     }));
-    mpRatingEventsTotal.inc({ rating: String(rating) });
+    mpRatingEventsTotal().inc({ rating: String(rating) });
   }
 
   async getRevenue(_agentId: string): Promise<string> {
