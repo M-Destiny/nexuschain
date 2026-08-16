@@ -36,6 +36,8 @@ export class HederaClient {
     backoffBaseMs;
     circuitFailureThreshold;
     circuit = { failures: 0, openUntil: 0 };
+    pinataJwt;
+    pinataGateway;
     constructor(config) {
         this.accountId = config.accountId;
         this.privateKey = config.privateKey;
@@ -43,6 +45,8 @@ export class HederaClient {
         this.maxRetries = config.maxRetries ?? 4;
         this.backoffBaseMs = config.backoffBaseMs ?? 250;
         this.circuitFailureThreshold = config.circuitFailureThreshold ?? 5;
+        this.pinataJwt = config.pinataJwt;
+        this.pinataGateway = config.pinataGateway ?? 'gateway.pinata.cloud';
         this.client = Client.forNetwork(NETWORK_MAP[config.network]);
         this.client.setOperator(new AccountId(this.accountId), PrivateKey.fromString(this.privateKey));
     }

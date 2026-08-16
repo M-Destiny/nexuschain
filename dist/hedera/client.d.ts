@@ -11,6 +11,8 @@ export interface HederaClientOptions {
     circuitFailureThreshold?: number;
     /** Pinata JWT for IPFS pinning (optional). */
     pinataJwt?: string;
+    /** Pinata Gateway domain for content retrieval (optional). Default: 'gateway.pinata.cloud'. */
+    pinataGateway?: string;
 }
 /**
  * Thin wrapper around the Hedera Consensus/Token Service SDK that adds:
@@ -32,6 +34,8 @@ export declare class HederaClient {
     private backoffBaseMs;
     private circuitFailureThreshold;
     private circuit;
+    private pinataJwt?;
+    private pinataGateway;
     constructor(config: HederaClientOptions);
     createTopic(name: string): Promise<string>;
     /**
