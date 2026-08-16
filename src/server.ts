@@ -101,7 +101,7 @@ async function startServer(config?: NexusChainConfig): Promise<void> {
 }
 
 // Auto-start if run directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.endsWith('server.ts') || process.argv[1]?.endsWith('server.js')) {
   startServer().catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);
