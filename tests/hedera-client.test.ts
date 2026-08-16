@@ -2,6 +2,7 @@
 // any top-level const. Dynamic calls inside the factory configure behaviour
 // that the tests then drive via the exported `getExecuteMock` / `setExecute`.
 let publishExecuteMock: (() => Promise<any>) | null = null;
+let executeMock: (() => Promise<any>) | null = null;
 let createTopicReceipt: () => { topicId: { toString: () => string } } = () => ({
   topicId: { toString: () => '0.0.9999' },
 });
