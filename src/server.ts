@@ -6,11 +6,17 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import { Registry, collectDefaultMetrics, Counter } from 'prom-client';
 import type { NexusChainConfig } from './types.js';
 
+// Import marketplace metrics registry setter
+import { setMetricsRegistry } from './marketplace.js';
+
 const app = express();
 const PORT = process.env.PORT ?? 8080;
 
 // Shared metrics registry (also used by Marketplace)
 const metricsRegistry = new Registry();
+
+// Make marketplace use the same registry
+setMetricsRegistry(metricsRegistry);
 
 // Collect default Node.js metrics (CPU, memory, event loop, etc.)
 collectDefaultMetrics({ register: metricsRegistry });

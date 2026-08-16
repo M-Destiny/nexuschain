@@ -1,6 +1,9 @@
 import { HederaClient } from './hedera/client.js';
 import type { MarketplaceListing, AgentFilter, AgentMetadata } from './types.js';
 import { Registry } from 'prom-client';
+declare function getMetricsRegistry(): Registry;
+declare function setMetricsRegistry(registry: Registry): void;
+export { getMetricsRegistry, setMetricsRegistry };
 export declare class Marketplace {
     private hedera;
     private contractId;
