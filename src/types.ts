@@ -54,6 +54,12 @@ export interface GovernanceProposal {
   createdBy: string;
   deadline: string;
   quorum: string;
+  /**
+   * After execution, action is queued and becomes executable only after
+   * this timestamp. Prevents rushed governance changes being applied the
+   * instant a vote closes — gives the community a window to rally / exit.
+   */
+  executableAt?: string;
   transactionHash?: string;
 }
 

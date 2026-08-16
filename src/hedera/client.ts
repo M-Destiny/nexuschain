@@ -59,6 +59,7 @@ export class HederaClient {
   private client: Client;
   private accountId: string;
   private privateKey: string;
+  private network: 'mainnet' | 'testnet' | 'previewnet';
   private maxRetries: number;
   private backoffBaseMs: number;
   private circuitFailureThreshold: number;
@@ -67,6 +68,7 @@ export class HederaClient {
   constructor(config: HederaClientOptions) {
     this.accountId = config.accountId;
     this.privateKey = config.privateKey;
+    this.network = config.network;
     this.maxRetries = config.maxRetries ?? 4;
     this.backoffBaseMs = config.backoffBaseMs ?? 250;
     this.circuitFailureThreshold = config.circuitFailureThreshold ?? 5;
@@ -141,6 +143,37 @@ export class HederaClient {
 
   getClient(): Client {
     return this.client;
+  }
+
+  /**
+   * Request HBAR from the Hedera testnet faucet for the operator account.
+   * Useful for spinning up dev environments without manually pasting
+   * account IDs into the web form.
+   *
+   * Refuses to run on mainnet or previewnet — the testnet faucet only
+   * funds testnet accounts, and silently requesting on mainnet would be
+   * a fatal operational mistake.
+   *
+   * @throws if the network is not testnet, or the faucet returns non-OK.
+   */
+  async fundFromTestnetFaucet(): Promise<{ status: string; accountId: string }> {
+    if (this.network !== 'testnet') {
+      throw new Error(
+        `fundFromTestnetFaucet is only safe on testnet; current network is '${this.network}'.`,
+      );
+    }
+    // The canonical Hedera testnet faucet is reached via the portal API.
+    const portalUrl = `https://portal.hedera.com/api/v1/faucet/transfer?accountId=${encodeURIComponent(this.accountId)}`;
+    const res = await fetch(portalUrl, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Hedera faucet request failed: ${res.status} ${res.statusText} ${body}`);
+    }
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return {
+      status: (data.status as string) ?? 'UNKNOWN',
+      accountId: this.accountId,
+    };
   }
 
   // ---------------------------------------------------------------------------
