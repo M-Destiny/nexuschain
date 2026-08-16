@@ -16,8 +16,6 @@ const TRANSIENT_PATTERNS = [
     'ECONNRESET',
     'ETIMEDOUT',
 ];
-// Pinata API endpoint for IPFS pinning
-const PINATA_API_URL = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
 /**
  * Thin wrapper around the Hedera Consensus/Token Service SDK that adds:
  *   - exponential-backoff retry for transient HCS publish errors,
