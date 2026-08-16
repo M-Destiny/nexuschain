@@ -1,7 +1,8 @@
 import { v4 as uuid } from 'uuid';
 import { Counter, Registry } from 'prom-client';
-// Prometheus metrics — share a single Registry (prom-client v15 removed Registry.counter shortcut)
-const metricsRegistry = new Registry();
+// Import shared metrics from server
+import { metricsRegistry } from './server.js';
+// Prometheus metrics — use shared registry
 const mpListingsTotal = new Counter({
     name: 'marketplace_listings_total',
     help: 'Total number of agent listings created',
