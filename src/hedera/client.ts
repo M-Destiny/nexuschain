@@ -8,6 +8,19 @@ import {
   AccountBalanceQuery,
 } from '@hashgraph/sdk';
 
+interface PinataPinResponse {
+  IpfsHash: string;
+  PinSize: number;
+  Timestamp: string;
+  isDuplicate: boolean;
+}
+
+interface PinataPinFileResponse {
+  IpfsHash: string;
+  PinSize: number;
+  Timestamp: string;
+}
+
 export interface HederaClientOptions {
   accountId: string;
   privateKey: string;
@@ -20,6 +33,8 @@ export interface HederaClientOptions {
   circuitFailureThreshold?: number;
   /** Pinata JWT for IPFS pinning (optional). */
   pinataJwt?: string;
+  /** Pinata Gateway domain for content retrieval (optional). Default: 'gateway.pinata.cloud'. */
+  pinataGateway?: string;
 }
 
 interface CircuitState {
@@ -66,6 +81,8 @@ export class HederaClient {
   private backoffBaseMs: number;
   private circuitFailureThreshold: number;
   private circuit: CircuitState = { failures: 0, openUntil: 0 };
+  private pinataJwt?: string;
+  private pinataGateway: string;
 
   constructor(config: HederaClientOptions) {
     this.accountId = config.accountId;
@@ -74,6 +91,8 @@ export class HederaClient {
     this.maxRetries = config.maxRetries ?? 4;
     this.backoffBaseMs = config.backoffBaseMs ?? 250;
     this.circuitFailureThreshold = config.circuitFailureThreshold ?? 5;
+    this.pinataJwt = config.pinataJwt;
+    this.pinataGateway = config.pinataGateway ?? 'gateway.pinata.cloud';
 
     this.client = Client.forNetwork(NETWORK_MAP[config.network]);
     this.client.setOperator(
