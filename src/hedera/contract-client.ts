@@ -13,7 +13,7 @@
  *   await contract.purchaseAgent('agent-1', { value: '6000000' }); // pay 0.06 HBAR
  *   const listing = await contract.getListing('agent-1');
  */
-import { ethers, Contract, Interface, EventLog } from 'ethers';
+import { ethers, Contract, Interface, LogDescription, EventLog, Log } from 'ethers';
 import { HederaClient } from './client.js';
 import type { ContractAddresses } from '../types.js';
 
@@ -180,14 +180,14 @@ function parseAgent(data: any): AgentOnChain {
   };
 }
 
-function parseListing(data: any): ListingOnChain {
-  return {
-    agentId: data[0],
-    price: data[1],
-    views: data[2],
-    exists: data[3],
-  };
-}
+// function parseListing(data: any): ListingOnChain {
+//   return {
+//     agentId: data[0],
+//     price: data[1],
+//     views: data[2],
+//     exists: data[3],
+//   };
+// }
 
 function parseProposal(data: any): ProposalOnChain {
   return {
@@ -218,7 +218,7 @@ export class ContractClient {
 
     // Create provider if not provided
     const provider = options.provider ?? new ethers.JsonRpcProvider(
-      NETWORK_RPC[this.hederaClient.getClient().network as keyof typeof NETWORK_RPC] ?? NETWORK_RPC.testnet,
+      NETWORK_RPC[this.hederaClient.getNetwork() as keyof typeof NETWORK_RPC] ?? NETWORK_RPC.testnet,
     );
 
     // Create signer if not provided (uses operator private key from HederaClient)
@@ -323,14 +323,14 @@ export class ContractClient {
 
     // Parse AgentPurchased event from logs
     const purchaseEvent = receipt.logs
-      .map(log => {
+      .map((log: Log) => {
         try {
           return this.iface.parseLog({ topics: log.topics, data: log.data });
         } catch {
           return null;
         }
       })
-      .find(e => e?.name === 'AgentPurchased');
+      .find((e: LogDescription | null) => e?.name === 'AgentPurchased');
 
     return {
       txHash: receipt.hash,
@@ -386,14 +386,14 @@ export class ContractClient {
     const receipt = await tx.wait();
 
     const execEvent = receipt.logs
-      .map(log => {
+      .map((log: Log) => {
         try {
           return this.iface.parseLog({ topics: log.topics, data: log.data });
         } catch {
           return null;
         }
       })
-      .find(e => e?.name === 'ProposalExecuted');
+      .find((e: LogDescription | null) => e?.name === 'ProposalExecuted');
 
     return {
       txHash: receipt.hash,
@@ -452,32 +452,32 @@ export class ContractClient {
   }
 
   /** Create a filter for AgentRegistered events */
-  filterAgentRegistered(fromBlock?: number, toBlock?: number): ethers.Filter {
+  filterAgentRegistered(fromBlock?: number, toBlock?: number): ethers.DeferredTopicFilter {
     return this.contract.filters.AgentRegistered(null, null, fromBlock, toBlock);
   }
 
   /** Create a filter for AgentPurchased events */
-  filterAgentPurchased(agentId?: string, fromBlock?: number, toBlock?: number): ethers.Filter {
+  filterAgentPurchased(agentId?: string, fromBlock?: number, toBlock?: number): ethers.DeferredTopicFilter {
     return this.contract.filters.AgentPurchased(agentId, null, null, fromBlock, toBlock);
   }
 
   /** Create a filter for AgentRated events */
-  filterAgentRated(agentId?: string, fromBlock?: number, toBlock?: number): ethers.Filter {
+  filterAgentRated(agentId?: string, fromBlock?: number, toBlock?: number): ethers.DeferredTopicFilter {
     return this.contract.filters.AgentRated(agentId, null, fromBlock, toBlock);
   }
 
   /** Create a filter for ProposalCreated events */
-  filterProposalCreated(fromBlock?: number, toBlock?: number): ethers.Filter {
+  filterProposalCreated(fromBlock?: number, toBlock?: number): ethers.DeferredTopicFilter {
     return this.contract.filters.ProposalCreated(null, fromBlock, toBlock);
   }
 
   /** Create a filter for VoteCast events */
-  filterVoteCast(proposalId?: string, fromBlock?: number, toBlock?: number): ethers.Filter {
+  filterVoteCast(proposalId?: string, fromBlock?: number, toBlock?: number): ethers.DeferredTopicFilter {
     return this.contract.filters.VoteCast(proposalId, null, null, fromBlock, toBlock);
   }
 
   /** Query historical events with a filter */
-  async queryEvents(filter: ethers.Filter): Promise<EventLog[]> {
+  async queryEvents(filter: ethers.ContractEventName): Promise<Array<EventLog | Log>> {
     return await this.contract.queryFilter(filter);
   }
 

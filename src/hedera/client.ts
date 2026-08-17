@@ -156,6 +156,10 @@ export class HederaClient {
     return this.client;
   }
 
+  getNetwork(): 'mainnet' | 'testnet' | 'previewnet' {
+    return this.network;
+  }
+
   /**
    * Request HBAR from the Hedera testnet faucet for the operator account.
    * Useful for spinning up dev environments without manually pasting
