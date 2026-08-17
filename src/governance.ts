@@ -103,14 +103,16 @@ export class Governance {
     if (this.hedera.getOperatorAccountId() !== this.vetoAddress) {
       throw new Error(`Only the veto address (${this.vetoAddress}) can veto proposals`);
     }
-    if (proposal.status !== 'passed') {
-      throw new Error(`Can only veto passed proposals (current: ${proposal.status})`);
-    }
     if (!proposal.executableAt) {
       throw new Error(`Proposal ${proposalId} has no executableAt timestamp`);
     }
+    // Check time-lock FIRST: if time-lock has elapsed, veto is no longer possible
+    // regardless of proposal status. This prevents vetoing already-executable proposals.
     if (new Date(proposal.executableAt) <= new Date()) {
-      throw new Error(`Cannot veto: time-lock has elapsed, proposal is already executable`);
+      throw new Error(`Cannot veto: time-lock has elapsed`);
+    }
+    if (proposal.status !== 'passed') {
+      throw new Error(`Can only veto passed proposals (current: ${proposal.status})`);
     }
 
     proposal.status = 'vetoed';
