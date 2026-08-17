@@ -6,6 +6,7 @@
  *   - Contract state reads (listings, agents, revenue)
  *   - Governance actions that mutate contract storage
  *   - Event filtering for indexer-friendly consumption
+ *   - Prometheus metrics for on-chain events
  *
  * Usage:
  *   const contract = new ContractClient(config.contracts.marketplace, hederaClient);
@@ -13,9 +14,142 @@
  *   await contract.purchaseAgent('agent-1', { value: '6000000' }); // pay 0.06 HBAR
  *   const listing = await contract.getListing('agent-1');
  */
-import { ethers, Contract, Interface, LogDescription, EventLog, Log } from 'ethers';
+import { ethers, Contract, Interface, LogDescription, Log } from 'ethers';
 import { HederaClient } from './client.js';
 import type { ContractAddresses } from '../types.js';
+import { Counter, Histogram, Registry } from 'prom-client';
+
+// Prometheus metrics registry
+let _contractMetricsRegistry: Registry | null = null;
+
+function getContractMetricsRegistry(): Registry {
+  if (!_contractMetricsRegistry) {
+    _contractMetricsRegistry = new Registry();
+  }
+  return _contractMetricsRegistry;
+}
+
+function setContractMetricsRegistry(registry: Registry): void {
+  _contractMetricsRegistry = registry;
+}
+
+/** Reset the shared metrics registry (for testing only). */
+export function resetContractMetricsRegistry(): void {
+  _contractMetricsRegistry = null;
+  _ccAgentRegisteredTotal = null;
+  _ccAgentPurchasedTotal = null;
+  _ccAgentRatedTotal = null;
+  _ccAgentUpgradedTotal = null;
+  _ccProposalCreatedTotal = null;
+  _ccVoteCastTotal = null;
+  _ccProposalExecutedTotal = null;
+  _ccTxLatency = null;
+}
+
+// Lazy metric creation
+let _ccAgentRegisteredTotal: Counter | null = null;
+let _ccAgentPurchasedTotal: Counter | null = null;
+let _ccAgentRatedTotal: Counter | null = null;
+let _ccAgentUpgradedTotal: Counter | null = null;
+let _ccProposalCreatedTotal: Counter | null = null;
+let _ccVoteCastTotal: Counter | null = null;
+let _ccProposalExecutedTotal: Counter | null = null;
+let _ccTxLatency: Histogram | null = null;
+
+function ccAgentRegisteredTotal(): Counter {
+  if (!_ccAgentRegisteredTotal) {
+    _ccAgentRegisteredTotal = new Counter({
+      name: 'contractclient_agent_registered_total',
+      help: 'Total number of agents registered on-chain',
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccAgentRegisteredTotal;
+}
+
+function ccAgentPurchasedTotal(): Counter {
+  if (!_ccAgentPurchasedTotal) {
+    _ccAgentPurchasedTotal = new Counter({
+      name: 'contractclient_agent_purchased_total',
+      help: 'Total number of agent purchases on-chain',
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccAgentPurchasedTotal;
+}
+
+function ccAgentRatedTotal(): Counter {
+  if (!_ccAgentRatedTotal) {
+    _ccAgentRatedTotal = new Counter({
+      name: 'contractclient_agent_rated_total',
+      help: 'Total number of agent ratings on-chain',
+      labelNames: ['rating'],
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccAgentRatedTotal;
+}
+
+function ccAgentUpgradedTotal(): Counter {
+  if (!_ccAgentUpgradedTotal) {
+    _ccAgentUpgradedTotal = new Counter({
+      name: 'contractclient_agent_upgraded_total',
+      help: 'Total number of agent upgrades on-chain',
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccAgentUpgradedTotal;
+}
+
+function ccProposalCreatedTotal(): Counter {
+  if (!_ccProposalCreatedTotal) {
+    _ccProposalCreatedTotal = new Counter({
+      name: 'contractclient_proposal_created_total',
+      help: 'Total number of governance proposals created on-chain',
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccProposalCreatedTotal;
+}
+
+function ccVoteCastTotal(): Counter {
+  if (!_ccVoteCastTotal) {
+    _ccVoteCastTotal = new Counter({
+      name: 'contractclient_vote_cast_total',
+      help: 'Total number of votes cast on-chain',
+      labelNames: ['support'],
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccVoteCastTotal;
+}
+
+function ccProposalExecutedTotal(): Counter {
+  if (!_ccProposalExecutedTotal) {
+    _ccProposalExecutedTotal = new Counter({
+      name: 'contractclient_proposal_executed_total',
+      help: 'Total number of governance proposals executed on-chain',
+      labelNames: ['passed'],
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccProposalExecutedTotal;
+}
+
+function ccTxLatency(): Histogram {
+  if (!_ccTxLatency) {
+    _ccTxLatency = new Histogram({
+      name: 'contractclient_tx_latency_seconds',
+      help: 'Latency of on-chain transactions in seconds',
+      labelNames: ['method'],
+      buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60],
+      registers: [getContractMetricsRegistry()],
+    });
+  }
+  return _ccTxLatency;
+}
+
+export { getContractMetricsRegistry, setContractMetricsRegistry };
 
 // NexusChainMarketplace.sol ABI (subset - extend as contract evolves)
 const MARKETPLACE_ABI = [
@@ -257,6 +391,7 @@ export class ContractClient {
     subscriptionTiers: SubscriptionTierInput[],
     version: string,
   ): Promise<{ txHash: string; blockNumber: number }> {
+    const start = Date.now();
     const tx = await this.contract.registerAgent(
       id,
       name,
@@ -268,6 +403,8 @@ export class ContractClient {
       version,
     );
     const receipt = await tx.wait();
+    ccAgentRegisteredTotal().inc();
+    ccTxLatency().observe({ method: 'registerAgent' }, (Date.now() - start) / 1000);
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
   }
 
@@ -318,6 +455,7 @@ export class ContractClient {
 
   /** Purchase agent access with HBAR payment (payable) */
   async purchaseAgent(agentId: string, valueTinybars: bigint): Promise<PurchaseResult> {
+    const start = Date.now();
     const tx = await this.contract.purchaseAgent(agentId, { value: valueTinybars });
     const receipt = await tx.wait();
 
@@ -332,6 +470,9 @@ export class ContractClient {
       })
       .find((e: LogDescription | null) => e?.name === 'AgentPurchased');
 
+    ccAgentPurchasedTotal().inc();
+    ccTxLatency().observe({ method: 'purchaseAgent' }, (Date.now() - start) / 1000);
+
     return {
       txHash: receipt.hash,
       blockNumber: receipt.blockNumber,
@@ -343,9 +484,12 @@ export class ContractClient {
 
   /** Rate an agent 1-5 stars */
   async rateAgent(agentId: string, rating: number): Promise<{ txHash: string; blockNumber: number }> {
+    const start = Date.now();
     if (rating < 1 || rating > 5) throw new Error('Rating must be 1-5');
     const tx = await this.contract.rateAgent(agentId, rating);
     const receipt = await tx.wait();
+    ccAgentRatedTotal().inc({ rating: String(rating) });
+    ccTxLatency().observe({ method: 'rateAgent' }, (Date.now() - start) / 1000);
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
   }
 
@@ -357,8 +501,11 @@ export class ContractClient {
 
   /** Upgrade agent to new version + IPFS CID (owner only, version must be higher) */
   async upgradeAgent(agentId: string, newVersion: string, newIpfsCid: string): Promise<{ txHash: string; blockNumber: number }> {
+    const start = Date.now();
     const tx = await this.contract.upgradeAgent(agentId, newVersion, newIpfsCid);
     const receipt = await tx.wait();
+    ccAgentUpgradedTotal().inc();
+    ccTxLatency().observe({ method: 'upgradeAgent' }, (Date.now() - start) / 1000);
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
   }
 
@@ -368,8 +515,11 @@ export class ContractClient {
 
   /** Create a governance proposal */
   async createProposal(id: string, title: string, description: string, durationDays: number): Promise<{ txHash: string; blockNumber: number }> {
+    const start = Date.now();
     const tx = await this.contract.createProposal(id, title, description, durationDays);
     const receipt = await tx.wait();
+    ccProposalCreatedTotal().inc();
+    ccTxLatency().observe({ method: 'createProposal' }, (Date.now() - start) / 1000);
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
   }
 
@@ -477,7 +627,7 @@ export class ContractClient {
   }
 
   /** Query historical events with a filter */
-  async queryEvents(filter: ethers.ContractEventName): Promise<Array<EventLog | Log>> {
+  async queryEvents(filter: ethers.ContractEventName): Promise<Array<ethers.EventLog | ethers.Log>> {
     return await this.contract.queryFilter(filter);
   }
 
