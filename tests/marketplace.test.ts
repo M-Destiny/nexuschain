@@ -253,8 +253,8 @@ describe('Marketplace', () => {
       await mp.listAgent('agent-2', '2000000');
 
       const registry = mp.getMetricsRegistry();
-      const counter = registry.getSingleMetric('marketplace_listings_total');
-      const value = counter?.values?.[0]?.value ?? 0;
+      const counter = registry.getSingleMetric('marketplace_listings_total') as any;
+      const value = counter?.hashMap?.['']?.value ?? 0;
       expect(value).toBe(2);
     });
 
@@ -266,8 +266,8 @@ describe('Marketplace', () => {
       await mp.purchaseAgent('agent-1', '0.0.8888');
 
       const registry = mp.getMetricsRegistry();
-      const counter = registry.getSingleMetric('marketplace_purchases_total');
-      const value = counter?.values?.[0]?.value ?? 0;
+      const counter = registry.getSingleMetric('marketplace_purchases_total') as any;
+      const value = counter?.hashMap?.['']?.value ?? 0;
       expect(value).toBe(2);
     });
 
@@ -280,7 +280,7 @@ describe('Marketplace', () => {
 
       const registry = mp.getMetricsRegistry();
       const counter = registry.getSingleMetric('marketplace_views_total');
-      const value = counter?.values?.[0]?.value ?? 0;
+      const value = counter?.hashMap?.['']?.value ?? 0;
       expect(value).toBe(2);
     });
 
@@ -291,7 +291,7 @@ describe('Marketplace', () => {
 
       const registry = mp.getMetricsRegistry();
       const counter = registry.getSingleMetric('marketplace_ratings_total');
-      const value = counter?.values?.reduce((sum, v) => sum + Number(v.value), 0) ?? 0;
+      const value = counter?.hashMap ? Object.values(counter.hashMap).reduce((sum, v) => sum + Number(v.value), 0) : 0;
       expect(value).toBe(2);
     });
   });
