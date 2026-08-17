@@ -8,11 +8,11 @@ import {
   Interface,
 } from "ethers";
 import type { Signer, ContractDeployTransaction, ContractRunner } from "ethers";
-import type { NonPayableOverrides } from "../common";
+import type { NonPayableOverrides } from "../common.js";
 import type {
   NexusChainMarketplace,
   NexusChainMarketplaceInterface,
-} from "../NexusChainMarketplace";
+} from "../NexusChainMarketplace.js";
 
 const _abi = [
   {

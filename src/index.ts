@@ -17,4 +17,4 @@ export type {
   ProposalCreatedEvent,
   ProposalExecutedEvent,
   VoteCastEvent,
-} from '../typechain-types';
+} from '../typechain-types/index.js';
