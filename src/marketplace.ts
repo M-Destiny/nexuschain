@@ -17,6 +17,15 @@ function setMetricsRegistry(registry: Registry): void {
   _metricsRegistry = registry;
 }
 
+/** Reset the shared metrics registry (for testing only). */
+export function resetMetricsRegistry(): void {
+  _metricsRegistry = null;
+  _mpListingsTotal = null;
+  _mpPurchasesTotal = null;
+  _mpViewsTotal = null;
+  _mpRatingEventsTotal = null;
+}
+
 // Lazy metric creation - metrics are created when first accessed
 let _mpListingsTotal: Counter | null = null;
 let _mpPurchasesTotal: Counter | null = null;

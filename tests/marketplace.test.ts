@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Marketplace } from '../src/marketplace.js';
+import { Marketplace, resetMetricsRegistry } from '../src/marketplace.js';
 import { makeMockHedera, type MockHedera } from './_mocks.js';
 import type { AgentMetadata, AgentFilter } from '../src/types.js';
 
@@ -29,6 +29,7 @@ describe('Marketplace', () => {
   beforeEach(() => {
     hedera = makeMockHedera();
     mp = new Marketplace(hedera as any, '0.0.67890');
+    resetMetricsRegistry();
   });
 
   it('listAgent stores a listing and returns a uuid', async () => {
