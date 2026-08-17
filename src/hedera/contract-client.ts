@@ -525,13 +525,17 @@ export class ContractClient {
 
   /** Vote on a proposal with HBAR weight */
   async vote(proposalId: string, support: boolean, amountTinybars: bigint): Promise<{ txHash: string; blockNumber: number }> {
+    const start = Date.now();
     const tx = await this.contract.vote(proposalId, support, amountTinybars);
     const receipt = await tx.wait();
+    ccVoteCastTotal().inc({ support: String(support) });
+    ccTxLatency().observe({ method: 'vote' }, (Date.now() - start) / 1000);
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
   }
 
   /** Execute a proposal after voting ends (if quorum met) */
   async executeProposal(proposalId: string): Promise<{ txHash: string; blockNumber: number; passed: boolean }> {
+    const start = Date.now();
     const tx = await this.contract.executeProposal(proposalId);
     const receipt = await tx.wait();
 
@@ -545,10 +549,14 @@ export class ContractClient {
       })
       .find((e: LogDescription | null) => e?.name === 'ProposalExecuted');
 
+    const passed = execEvent?.args?.passed ?? false;
+    ccProposalExecutedTotal().inc({ passed: String(passed) });
+    ccTxLatency().observe({ method: 'executeProposal' }, (Date.now() - start) / 1000);
+
     return {
       txHash: receipt.hash,
       blockNumber: receipt.blockNumber,
-      passed: execEvent?.args?.passed ?? false,
+      passed,
     };
   }
 
@@ -640,6 +648,11 @@ export class ContractClient {
   /** Remove all listeners (cleanup) */
   removeAllListeners(): void {
     this.contract.removeAllListeners();
+  }
+
+  /** Expose metrics registry for Prometheus scraping. */
+  getMetricsRegistry(): Registry {
+    return getContractMetricsRegistry();
   }
 }
 
